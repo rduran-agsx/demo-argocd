@@ -1,2 +1,2 @@
-# CET-Onboarding
+# cet-onboarding
 CET project onboarding
