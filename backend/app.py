@@ -8,7 +8,7 @@ from config import Config
 db = SQLAlchemy()
 
 def create_app():
-    app = Flask(name)
+    app = Flask(__name__)
     app.config.from_object(Config)
 
     CORS(app, resources={r"/api/*": {"origins": Config.CORS_ORIGINS}})

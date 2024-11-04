@@ -4,9 +4,9 @@ from app import app
 import logging
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(name)
+logger = logging.getLogger(__name__)
 
-if name == 'main':
+if __name__ == '__main__':
     try:
         logger.info("Starting Flask application...")
         app.run(debug=True, host='0.0.0.0')

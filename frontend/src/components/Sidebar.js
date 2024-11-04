@@ -276,7 +276,7 @@ const Sidebar = ({
             position="relative"
             transition="color 0.2s"
           >
-            athena
+            hiraya
             <sup
               style={{
                 fontSize: "8px",
