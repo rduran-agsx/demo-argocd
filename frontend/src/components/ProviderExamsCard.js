@@ -129,7 +129,6 @@ const ProviderExamsCard = ({ onExamSelect, view, onViewChange }) => {
     setCurrentPage(1);
   };
 
-  // Mobile search drawer component
   const SearchDrawer = () => (
     <Drawer isOpen={isOpen} placement="bottom" onClose={onClose}>
       <DrawerOverlay />

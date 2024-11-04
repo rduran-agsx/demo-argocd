@@ -44,17 +44,15 @@ const CustomButton = ({ children, onClick, isDanger = false, ...props }) => {
   const { colorMode } = useColorMode();
   const buttonHeight = useBreakpointValue({ base: "40px", md: "48px" });
   const fontSize = useBreakpointValue({ base: "14px", md: "16px" });
-  // Increased padding, especially for delete buttons
   const padding = useBreakpointValue({ 
     base: "0 16px",
-    md: isDanger ? "0 40px" : "0 32px" // More padding for delete button to accommodate icon
+    md: isDanger ? "0 40px" : "0 32px"
   });
   const buttonWidth = useBreakpointValue({ 
-    base: "100%", // Full width on mobile
-    md: "auto" // Natural width on desktop
+    base: "100%",
+    md: "auto"
   });
 
-  // For danger buttons, we'll use specific colors rather than theme colors
   const dangerColors = {
     light: {
       bg: "#FF3333",
@@ -76,7 +74,7 @@ const CustomButton = ({ children, onClick, isDanger = false, ...props }) => {
       px={padding}
       minW={useBreakpointValue({ 
         base: "auto", 
-        md: isDanger ? "200px" : "120px" // Wider minimum width for delete button
+        md: isDanger ? "200px" : "120px"
       })}
       width={buttonWidth}
       bg={isDanger 
@@ -128,7 +126,7 @@ const DeleteConfirmationModal = ({
   title = "Confirm Deletion",
   message,
   itemCount,
-  deleteType // "selected" or "all"
+  deleteType
 }) => {
   const { colorMode } = useColorMode();
   const modalPadding = useBreakpointValue({ base: 4, md: 6 });

@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Flex, Text, Link, Tooltip, useColorModeValue } from '@chakra-ui/react';
 import { ChevronRightIcon } from '@chakra-ui/icons';
 
-// Create a separate BreadcrumbItem component
 const BreadcrumbItem = React.memo(({ 
   item, 
   isTruncated, 
@@ -65,7 +64,6 @@ const Breadcrumbs = ({ items }) => {
   const itemRefs = useRef([]);
   const [itemWidths, setItemWidths] = useState([]);
 
-  // Theme-aware colors - moved to top level
   const currentPageColor = useColorModeValue('gray.500', 'gray.400');
   const linkColor = useColorModeValue('brand.primary.light', 'brand.primary.dark');
   const hoverColor = useColorModeValue('brand.primary.dark', 'brand.primary.light');

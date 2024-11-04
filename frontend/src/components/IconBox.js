@@ -98,7 +98,7 @@ const StarIconBox = ({
   const [isPressed, setIsPressed] = useState(false);
   const { colorMode } = useColorMode();
   const iconSize = `${parseInt(size) * iconScale}px`;
-  const starFillColor = "#FFD700"; // Gold color for star
+  const starFillColor = "#FFD700";
 
   return (
     <Box

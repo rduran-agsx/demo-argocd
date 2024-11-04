@@ -4,8 +4,8 @@ import { FixedSizeList as List } from 'react-window';
 
 const QuestionListDropdown = React.memo(({ questions, currentQuestion, onSelect }) => {
   const { colorMode } = useColorMode();
-  const itemSize = 32; // Height of each item in pixels
-  const listHeight = Math.min(questions.length * itemSize, 300); // Max height of 300px
+  const itemSize = 32;
+  const listHeight = Math.min(questions.length * itemSize, 300);
 
   const Row = ({ index, style }) => {
     const question = questions[index];

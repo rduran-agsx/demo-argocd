@@ -23,7 +23,6 @@ def get_providers():
     page = request.args.get('page', type=int)
     per_page = request.args.get('per_page', type=int)
     
-    # Get provider statistics
     provider_stats = db.session.query(
         Provider.id,
         func.count(Exam.id).label('total_exams'),
@@ -32,7 +31,6 @@ def get_providers():
         Exam, Provider.id == Exam.provider_id, isouter=True
     ).group_by(Provider.id).all()
     
-    # Create a lookup dictionary for stats
     stats_lookup = {
         id: {
             'total_exams': total_exams or 0,
@@ -48,7 +46,7 @@ def get_providers():
                 {
                     'name': provider.name,
                     'description': get_provider_description(provider.name),
-                    'image': f"/api/placeholder/100/100",  # Placeholder for provider logo
+                    'image': f"/api/placeholder/100/100",
                     'totalExams': stats_lookup.get(provider.id, {}).get('total_exams', 0),
                     'totalQuestions': stats_lookup.get(provider.id, {}).get('total_questions', 0),
                     'exams': sorted([
@@ -74,7 +72,7 @@ def get_providers():
                 {
                     'name': provider.name,
                     'description': get_provider_description(provider.name),
-                    'image': f"/api/placeholder/100/100",  # Placeholder for provider logo
+                    'image': f"/api/placeholder/100/100",
                     'totalExams': stats_lookup.get(provider.id, {}).get('total_exams', 0),
                     'totalQuestions': stats_lookup.get(provider.id, {}).get('total_questions', 0),
                     'exams': sorted([
@@ -99,25 +97,20 @@ def get_exam(exam_id):
     if exam_id == 'undefined' or '-' not in exam_id:
         abort(400, description="Invalid exam ID")
     
-    # Decode the URL-encoded exam_id and handle the format
     exam_id = unquote(exam_id)
     
-    # Split on the first hyphen only to get provider name
     provider_name, exam_title_with_code = exam_id.split('-', 1)
     
-    # Find the provider
     provider = Provider.query.filter_by(name=provider_name).first()
     if not provider:
         abort(404, description="Provider not found")
     
-    # Search for exam using the display title format
     exam = Exam.query.filter_by(
         provider_id=provider.id,
         title=exam_title_with_code
     ).first()
     
     if not exam:
-        # Try alternative format
         exam = Exam.query.filter(
             Exam.provider_id == provider.id,
             Exam.id.ilike(f"{provider_name}-{exam_title_with_code}%")
@@ -134,29 +127,26 @@ def get_exam(exam_id):
         'topics': {topic.number: topic.data for topic in exam.topics}
     }
     
-    # Track the exam visit
     try:
-        user_id = 1  # You'd get this from authentication in a real app
+        user_id = 1
         
-        # Update or create ExamVisit record
         visit = ExamVisit.query.filter_by(
             user_id=user_id,
-            exam_id=exam.id  # Use the actual exam.id from database
+            exam_id=exam.id
         ).first()
         
         if not visit:
             visit = ExamVisit(
                 user_id=user_id,
-                exam_id=exam.id  # Use the actual exam.id from database
+                exam_id=exam.id
             )
             db.session.add(visit)
         else:
             visit.last_visit_date = datetime.utcnow()
         
-        # Update last_visited_exam in preferences
         preference = UserPreference.query.filter_by(user_id=user_id).first()
         if preference:
-            preference.last_visited_exam = exam.id  # Use the actual exam.id
+            preference.last_visited_exam = exam.id
         else:
             preference = UserPreference(user_id=user_id, last_visited_exam=exam.id)
             db.session.add(preference)
@@ -166,13 +156,11 @@ def get_exam(exam_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error tracking exam visit: {str(e)}")
-        # Continue with the response even if tracking fails
     
     return jsonify(exam_data)
 
 @app.route('/api/user-preference', methods=['GET', 'POST'])
 def user_preference():
-    # For simplicity, we're using a hardcoded user_id. In a real app, you'd get this from authentication.
     user_id = 1
 
     if request.method == 'GET':
@@ -195,15 +183,13 @@ def user_preference():
 @app.route('/api/favorite', methods=['POST'])
 def favorite_question():
     data = request.json
-    user_id = 1  # For simplicity, we're using a hardcoded user_id
+    user_id = 1
     exam_id = unquote(data['exam_id'])
     topic_number = data['topic_number']
     question_index = data['question_index']
 
-    # Find the exam in the database
     exam = Exam.query.filter_by(id=exam_id).first()
     if not exam:
-        # Try to find the exam using different patterns
         provider_name = exam_id.split('-')[0]
         exam_title = exam_id.split(':', 1)[1].strip() if ':' in exam_id else exam_id
         
@@ -215,7 +201,6 @@ def favorite_question():
         if not exam:
             return jsonify({'error': 'Exam not found'}), 404
         
-        # Use the actual exam ID from the database
         exam_id = exam.id
 
     favorite = FavoriteQuestion.query.filter_by(
@@ -246,7 +231,7 @@ def favorite_question():
 
 @app.route('/api/favorites/<exam_id>', methods=['GET'])
 def get_favorite_questions(exam_id):
-    user_id = 1  # For simplicity, we're using a hardcoded user_id. In a real app, you'd get this from authentication.
+    user_id = 1
     favorites = FavoriteQuestion.query.filter_by(user_id=user_id, exam_id=exam_id).order_by(FavoriteQuestion.topic_number, FavoriteQuestion.question_index).all()
     return jsonify({
         'favorites': [
@@ -260,7 +245,7 @@ def get_favorite_questions(exam_id):
 @app.route('/api/save-answer', methods=['POST'])
 def save_answer():
     data = request.json
-    user_id = 1  # For simplicity, we're using a hardcoded user_id. In a real app, you'd get this from authentication.
+    user_id = 1
     exam_id = data['exam_id']
     topic_number = data['topic_number']
     question_index = data['question_index']
@@ -290,7 +275,7 @@ def save_answer():
 
 @app.route('/api/get-answers/<exam_id>', methods=['GET'])
 def get_answers(exam_id):
-    user_id = 1  # For simplicity, we're using a hardcoded user_id. In a real app, you'd get this from authentication.
+    user_id = 1
     user_answers = UserAnswer.query.filter_by(user_id=user_id, exam_id=exam_id).all()
     return jsonify({
         'answers': [
@@ -308,10 +293,8 @@ def submit_answers():
     exam_id = unquote(data['exam_id'])
     user_answers = data['user_answers']
     
-    # Find the exam in the database
     exam = Exam.query.filter_by(id=exam_id).first()
     if not exam:
-        # Try to find the exam using different patterns
         provider_name = exam_id.split('-')[0]
         exam_title = exam_id.split(':', 1)[1].strip() if ':' in exam_id else exam_id
         
@@ -323,7 +306,6 @@ def submit_answers():
         if not exam:
             return jsonify({'error': 'Exam not found'}), 404
         
-        # Use the actual exam ID from the database
         exam_id = exam.id
 
     if not exam:
@@ -352,10 +334,9 @@ def submit_answers():
     score = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
     passed = score >= 75
 
-    # Store the exam attempt
     try:
         exam_attempt = ExamAttempt(
-            user_id=1,  # Replace with actual user authentication
+            user_id=1,
             exam_id=exam_id,
             score=score,
             total_questions=total_questions,
@@ -381,7 +362,7 @@ def submit_answers():
 
 @app.route('/api/incorrect-questions/<exam_id>', methods=['GET'])
 def get_incorrect_questions(exam_id):
-    user_id = 1  # Replace with actual user authentication
+    user_id = 1
     latest_attempt = ExamAttempt.query.filter_by(user_id=user_id, exam_id=exam_id).order_by(ExamAttempt.attempt_date.desc()).first()
     
     if not latest_attempt:
@@ -391,15 +372,13 @@ def get_incorrect_questions(exam_id):
 
 @app.route('/api/exam-progress', methods=['GET'])
 def get_exam_progress():
-    user_id = 1  # Replace with actual user authentication
+    user_id = 1
     
-    # Get ALL exams that the user has interacted with
     base_query = db.session.query(Exam).distinct().join(
-        Provider,  # Join with Provider to get provider information
+        Provider,
         Exam.provider_id == Provider.id
     )
 
-    # Get exams from various sources
     exam_queries = [
         base_query.join(UserAnswer, UserAnswer.exam_id == Exam.id).filter(UserAnswer.user_id == user_id),
         base_query.join(ExamAttempt, ExamAttempt.exam_id == Exam.id).filter(ExamAttempt.user_id == user_id),
@@ -407,29 +386,23 @@ def get_exam_progress():
         base_query.join(UserPreference, UserPreference.last_visited_exam == Exam.id).filter(UserPreference.user_id == user_id)
     ]
 
-    # Combine all queries using union
     final_query = exam_queries[0]
     for query in exam_queries[1:]:
         final_query = final_query.union(query)
 
     user_exams = final_query.all()
 
-    # Group exams by provider
     provider_data = {}
     for exam in user_exams:
-        # Get total questions count
         total_questions = exam.total_questions
         
-        # Get user's answered questions count
         answered_questions = UserAnswer.query.filter_by(
             user_id=user_id,
             exam_id=exam.id
         ).count()
         
-        # Calculate progress percentage
         progress = round((answered_questions / total_questions * 100) if total_questions > 0 else 0, 1)
         
-        # Get exam attempts
         attempts = ExamAttempt.query.filter_by(
             user_id=user_id,
             exam_id=exam.id
@@ -444,13 +417,12 @@ def get_exam_progress():
             latest_attempt = attempts[0]
             correct_answers = round((latest_attempt.score / 100) * latest_attempt.total_questions)
             latest_grade = {
-                'score': correct_answers,  # Number of correct answers
-                'total': latest_attempt.total_questions  # Total questions in the attempt
+                'score': correct_answers,
+                'total': latest_attempt.total_questions
             }
             status = "Passed" if latest_attempt.score >= 75 else "Failed"
             average_score = round(sum(attempt.score for attempt in attempts) / attempt_count, 2)
         
-        # Calculate time since last update
         last_update = None
         if attempts:
             time_diff = datetime.utcnow() - attempts[0].attempt_date
@@ -475,7 +447,6 @@ def get_exam_progress():
                 months = time_diff.days // 30
                 last_update = f"{months} {'month' if months == 1 else 'months'} ago"
         else:
-            # Check if the user has answered any questions
             last_answer = UserAnswer.query.filter_by(
                 user_id=user_id,
                 exam_id=exam.id
@@ -484,7 +455,6 @@ def get_exam_progress():
             if last_answer:
                 last_update = "In Progress"
             else:
-                # Check visit time
                 visit = ExamVisit.query.filter_by(
                     user_id=user_id,
                     exam_id=exam.id
@@ -515,7 +485,6 @@ def get_exam_progress():
                 else:
                     last_update = "Not Started"
 
-        # Get timestamp for sorting
         timestamp = None
         if attempts:
             timestamp = attempts[0].attempt_date.timestamp() * 1000
@@ -533,14 +502,13 @@ def get_exam_progress():
             'progress': progress,
             'latestGrade': latest_grade or {
                 'score': 0,
-                'total': total_questions  # Use actual total questions when no attempt
+                'total': total_questions
             },
             'status': status,
             'timestamp': timestamp,
             'updated': last_update
         }
         
-        # Group by provider
         provider_name = exam.provider.name
         if provider_name not in provider_data:
             provider_data[provider_name] = {
@@ -550,19 +518,17 @@ def get_exam_progress():
             }
         provider_data[provider_name]['exams'].append(exam_data)
 
-        # Sort exams within each provider by timestamp (most recent first)
         provider_data[provider_name]['exams'].sort(
             key=lambda x: x['timestamp'] if x['timestamp'] else 0,
             reverse=True
         )
 
-    # Convert to list and return
     return jsonify({'providers': list(provider_data.values())})
 
 @app.route('/api/track-exam-visit', methods=['POST'])
 def track_exam_visit():
     data = request.json
-    user_id = 1  # Replace with actual user authentication
+    user_id = 1
     exam_id = data.get('exam_id')
     
     if not exam_id:
@@ -585,22 +551,17 @@ def track_exam_visit():
     db.session.commit()
     return jsonify({'message': 'Visit tracked successfully'}), 200
 
-# backend/routes.py
-
-# Add these new routes to your existing routes.py file
-
 @app.route('/api/delete-exams', methods=['POST'])
 def delete_exams():
     """Delete selected exams and their associated data"""
     data = request.json
-    user_id = 1  # Replace with actual user authentication
+    user_id = 1
     exam_ids = data.get('exam_ids', [])
     
     if not exam_ids:
         return jsonify({'error': 'No exam IDs provided'}), 400
     
     try:
-        # Delete associated data first (due to foreign key constraints)
         UserPreference.query.filter(
             UserPreference.user_id == user_id,
             UserPreference.last_visited_exam.in_(exam_ids)
@@ -626,7 +587,6 @@ def delete_exams():
             ExamVisit.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
-        # Update progress to 0 for the exams
         Exam.query.filter(Exam.id.in_(exam_ids)).update(
             {Exam.progress: 0}, 
             synchronize_session=False
@@ -643,14 +603,13 @@ def delete_exams():
 def delete_provider_exams():
     """Delete all exams for specified providers"""
     data = request.json
-    user_id = 1  # Replace with actual user authentication
+    user_id = 1
     provider_names = data.get('provider_names', [])
     
     if not provider_names:
         return jsonify({'error': 'No provider names provided'}), 400
     
     try:
-        # Get all exam IDs for the specified providers
         exam_ids = db.session.query(Exam.id).join(Provider).filter(
             Provider.name.in_(provider_names)
         ).all()
@@ -659,7 +618,6 @@ def delete_provider_exams():
         if not exam_ids:
             return jsonify({'message': 'No exams found for the specified providers'}), 200
         
-        # Delete associated data
         UserPreference.query.filter(
             UserPreference.user_id == user_id,
             UserPreference.last_visited_exam.in_(exam_ids)
@@ -685,7 +643,6 @@ def delete_provider_exams():
             ExamVisit.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
-        # Update progress to 0 for all exams
         Exam.query.filter(Exam.id.in_(exam_ids)).update(
             {Exam.progress: 0}, 
             synchronize_session=False
@@ -701,10 +658,9 @@ def delete_provider_exams():
 @app.route('/api/delete-all-progress', methods=['POST'])
 def delete_all_progress():
     """Delete all exam progress for the user"""
-    user_id = 1  # Replace with actual user authentication
+    user_id = 1
     
     try:
-        # Delete all user data
         UserPreference.query.filter_by(user_id=user_id).update(
             {UserPreference.last_visited_exam: None}, 
             synchronize_session=False
@@ -714,7 +670,6 @@ def delete_all_progress():
         ExamAttempt.query.filter_by(user_id=user_id).delete(synchronize_session=False)
         ExamVisit.query.filter_by(user_id=user_id).delete(synchronize_session=False)
         
-        # Reset progress for all exams
         Exam.query.update({Exam.progress: 0}, synchronize_session=False)
         
         db.session.commit()
@@ -726,7 +681,7 @@ def delete_all_progress():
 
 @app.route('/api/sidebar-state', methods=['GET'])
 def get_sidebar_state():
-    user_id = 1  # Replace with actual user authentication
+    user_id = 1
     preference = UserPreference.query.filter_by(user_id=user_id).first()
     
     if preference:
@@ -735,7 +690,7 @@ def get_sidebar_state():
 
 @app.route('/api/sidebar-state', methods=['POST'])
 def update_sidebar_state():
-    user_id = 1  # Replace with actual user authentication
+    user_id = 1
     data = request.json
     is_collapsed = data.get('is_collapsed', False)
     
@@ -756,7 +711,6 @@ def update_sidebar_state():
 def get_provider_statistics():
     """Get provider statistics and categories."""
     try:
-        # Get real statistics from database
         provider_stats = db.session.query(
             Provider.name,
             Provider.is_popular,
@@ -769,7 +723,6 @@ def get_provider_statistics():
             Provider.is_popular
         ).all()
 
-        # Create a lookup dictionary for real stats
         stats_lookup = {
             name: {
                 'description': get_provider_description(name),
@@ -780,10 +733,8 @@ def get_provider_statistics():
             for name, is_popular, total_exams, total_questions in provider_stats
         }
 
-        # Get categories from provider_categories
         categories = get_provider_categories()
 
-        # Update providers with real stats while keeping original structure
         for category in categories:
             category['providers'] = [
                 {
@@ -807,7 +758,7 @@ def get_provider_statistics():
 @app.route('/api/health')
 def health_check():
     try:
-        # Try to query the database
+        # try to query the database
         db.session.execute(text('SELECT 1'))
         return jsonify({'status': 'healthy', 'database': 'connected'}), 200
     except Exception as e:

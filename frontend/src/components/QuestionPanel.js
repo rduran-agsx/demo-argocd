@@ -39,7 +39,7 @@ const QuestionPanel = ({
   questionNumber,
   totalQuestions,
   questionData,
-  examData, // Add this prop
+  examData,
   isStarFilled,
   toggleStar,
   onNavigateLeft,
@@ -492,7 +492,6 @@ const QuestionPanel = ({
   ]);
 
   const renderQuestions = () => {
-    // Create a container for the content with extra bottom padding for mobile
     return (
       <Box paddingBottom={{ base: "25px", md: 0 }}>
         {currentTab === "ANSWERED" && answeredQuestions.length === 0 ? (

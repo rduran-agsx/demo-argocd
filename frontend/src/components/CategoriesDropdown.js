@@ -66,19 +66,16 @@ const CategoriesDropdown = ({ categories, selectedCategory, onSelect }) => {
   };
 
   const sortedCategories = useMemo(() => {
-    // Separate "All Categories", "Other Certifications" and regular categories
     const allCategories = categories.find(cat => cat === "All Categories");
     const otherCertifications = categories.find(cat => cat === "Other Certifications");
     const regularCategories = categories.filter(cat => 
       cat !== "Other Certifications" && cat !== "All Categories"
     );
     
-    // Sort regular categories alphabetically
     const sortedRegular = regularCategories.sort((a, b) => a.localeCompare(b));
     
-    // Combine them in the desired order, ensuring "All Categories" is first
     return [
-      allCategories || "All Categories", // Always include "All Categories"
+      allCategories || "All Categories",
       ...sortedRegular,
       otherCertifications
     ].filter(Boolean);

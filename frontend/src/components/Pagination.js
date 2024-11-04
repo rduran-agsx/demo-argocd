@@ -8,7 +8,6 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 
   const getPageNumbers = () => {
     const pageNumbers = [];
-    // Mobile view - show only current page with immediate neighbors
     if (isMobile) {
       if (totalPages <= 3) {
         for (let i = 1; i <= totalPages; i++) {
@@ -24,7 +23,6 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
         }
       }
     } 
-    // Desktop view - show more pages
     else {
       if (totalPages <= 7) {
         for (let i = 1; i <= totalPages; i++) {

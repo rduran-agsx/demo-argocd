@@ -33,24 +33,24 @@ def get_exam_order(exam_title, provider_name):
             'AWS Certified Alexa Skill Builder Specialty': 14,
             'AWS Certified Big Data Specialty': 15,
         }
-        
+
         version_priority = {
             'C03': 1,
             'C02': 2,
             'C01': 3,
             'C00': 4,
         }
-        
+
         base_order = 100
         for key, value in order_map.items():
             if key.lower() in exam_title.lower():
                 base_order = value
                 break
-        
+
         for version, priority in version_priority.items():
             if version in exam_title:
                 return base_order * 10 + priority
-        
+
         return base_order * 10
 
     elif provider_name.lower() == 'google':
@@ -75,8 +75,7 @@ def get_exam_order(exam_title, provider_name):
             'Google Analytics Individual Qualification': 18,
             'Google AdWords Fundamentals': 19,
         }
-        
-        # Special handling for specific exams
+
         if 'Google Professional ChromeOS Administrator' in exam_title:
             return 12
         elif 'Google G Suite Certification' in exam_title:
@@ -87,7 +86,7 @@ def get_exam_order(exam_title, provider_name):
             return 18
         elif 'Google AdWords Fundamentals' in exam_title:
             return 19
-        
+
         for key, value in order_map.items():
             if key.lower() in exam_title.lower():
                 return value

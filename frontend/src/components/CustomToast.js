@@ -137,7 +137,6 @@ const CustomToast = ({
   );
 };
 
-// Custom toast function to be used with Chakra's useToast
 export const createCustomToast = (toast) => {
   return ({
     title,

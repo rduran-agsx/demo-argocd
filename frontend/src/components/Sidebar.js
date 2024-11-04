@@ -64,7 +64,7 @@ const DesktopSidebarIcon = chakra(SidebarIcon, {
   baseStyle: {
     position: "absolute",
     left: "20px",
-    fontSize: "24px", // This won't affect the actual icon size
+    fontSize: "24px",
   },
 });
 
@@ -203,7 +203,6 @@ const Sidebar = ({
     }
   };
 
-  // Mobile Sidebar
   if (isMobile) {
     return (
       <Box
@@ -238,7 +237,6 @@ const Sidebar = ({
     );
   }
 
-  // Desktop Sidebar
   return (
     <Box
       backgroundColor={bgColor}

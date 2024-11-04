@@ -72,15 +72,12 @@ export const badgeUrls = {
 };
 
 export const getBadgeUrl = (examTitle) => {
-  // Remove exam code if present
   const titleWithoutCode = examTitle.replace(/^[A-Z0-9-]+:\s*/, '');
   
-  // Try to find an exact match
   if (badgeUrls[titleWithoutCode]) {
     return badgeUrls[titleWithoutCode];
   }
 
-  // If no exact match, try to find a partial match
   const partialMatch = Object.keys(badgeUrls).find(key => 
     titleWithoutCode.toLowerCase().includes(key.toLowerCase())
   );

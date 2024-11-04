@@ -11,7 +11,6 @@ const sanitizeOptionText = (text) => {
 const OptionBox = ({ option, isSelected, onClick, isDisabled }) => {
   const { colorMode } = useColorMode();
   
-  // Simplified background color selection
   const getBgColor = () => {
     if (isSelected) {
       return colorMode === 'light' ? 'brand.primary.light' : 'brand.primary.dark';
@@ -30,7 +29,6 @@ const OptionBox = ({ option, isSelected, onClick, isDisabled }) => {
       cursor={isDisabled ? "not-allowed" : "pointer"}
       opacity={isDisabled ? 0.5 : 1}
       transition="all 0.15s ease"
-      // Simplified hover state
       _hover={!isDisabled && {
         bg: colorMode === 'light' ? 'brand.secondary.light' : 'brand.secondary.dark'
       }}
@@ -51,16 +49,13 @@ const OptionsBox = ({ options, selectedOptions, onOptionSelect, maxSelections, i
   const { colorMode } = useColorMode();
   const [isOpen, setIsOpen] = useState(true);
 
-  // Simplified selection handler
   const handleSelect = (index) => {
     const isCurrentlySelected = selectedOptions.includes(index);
     const hasReachedMax = selectedOptions.length >= maxSelections;
 
     if (isCurrentlySelected) {
-      // Always allow deselection
       onOptionSelect(selectedOptions.filter(i => i !== index));
     } else if (!hasReachedMax) {
-      // Only allow selection if under max limit
       onOptionSelect([...selectedOptions, index]);
     }
   };

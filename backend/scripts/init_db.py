@@ -1,4 +1,12 @@
-# backend/init_db.py
+# backend/scripts/init_db.py
+
+import os
+import sys
+from pathlib import Path
+
+script_dir = Path(__file__).resolve().parent
+backend_dir = script_dir.parent
+sys.path.append(str(backend_dir))
 
 from app import app, db
 from models import Provider, Exam, Topic, UserPreference, FavoriteQuestion, UserAnswer, ExamAttempt, ExamVisit
@@ -11,11 +19,9 @@ def init_db():
     """Initialize the database by creating all tables."""
     try:
         with app.app_context():
-            # Drop all tables
             db.drop_all()
             logger.info("Dropped all tables.")
 
-            # Create all tables
             db.create_all()
             logger.info("Created all tables successfully.")
 

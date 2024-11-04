@@ -60,7 +60,7 @@ const CustomButton = ({ children, onClick, isPrimary = false }) => {
       px={padding}
       minW={useBreakpointValue({ 
         base: "auto",
-        md: isPrimary ? "120px" : "120px"  // Same widths as delete modal
+        md: isPrimary ? "120px" : "120px"
       })}
       width={buttonWidth}
       bg={isPrimary 

@@ -30,7 +30,6 @@ import DeleteConfirmationModal from "./DeleteConfirmationModal";
 import { createCustomToast } from "./CustomToast";
 import Pagination from "./Pagination";
 
-// Components
 const CustomCheckbox = ({ isChecked, isIndeterminate, onChange }) => {
   const { colorMode } = useColorMode();
 
@@ -631,7 +630,6 @@ const EmptyProgressState = () => {
   );
 };
 
-// Mobile Components
 const ExamMobileCard = ({ exam, isSelected, onSelect, navigate }) => {
   const { colorMode } = useColorMode();
 
@@ -716,7 +714,6 @@ const ExamMobileCard = ({ exam, isSelected, onSelect, navigate }) => {
   );
 };
 
-// Search Drawer Component
 const SearchDrawer = ({ isOpen, onClose, searchTerm, setSearchTerm }) => {
   const { colorMode } = useColorMode();
 
@@ -1351,7 +1348,6 @@ const CustomDashboardTable = ({ data, onDeleteSelected, onDeleteAll }) => {
 };
 
 const Dashboard = () => {
-  // State declarations
   const [showMobileApps, setShowMobileApps] = useState(true);
   const [showSupport, setShowSupport] = useState(true);
   const [examProgress, setExamProgress] = useState([]);
@@ -1361,17 +1357,14 @@ const Dashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const providersPerPage = 3;
 
-  // Calculate pagination values
   const totalPages = Math.ceil((examProgress?.length || 0) / providersPerPage);
   const indexOfLastProvider = currentPage * providersPerPage;
   const indexOfFirstProvider = indexOfLastProvider - providersPerPage;
   const currentProviders = examProgress.slice(indexOfFirstProvider, indexOfLastProvider);
 
-  // Refs for cleanup and preventing memory leaks
   const abortControllerRef = useRef(null);
   const isMounted = useRef(true);
 
-  // Hooks
   const toast = useToast();
   const toastRef = useRef(createCustomToast(toast));
   const {
@@ -1380,12 +1373,10 @@ const Dashboard = () => {
     onClose: closeDeleteModal,
   } = useDisclosure();
 
-  // Add pagination handler
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
 
-  // Fetch exam progress with cleanup and error handling
   const fetchExamProgress = useCallback(async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -1561,11 +1552,11 @@ const Dashboard = () => {
       ) : (
         <>
           <CustomDashboardTable
-            data={currentProviders} // Changed from examProgress to currentProviders
+            data={currentProviders}
             onDeleteSelected={handleDeleteSelected}
             onDeleteAll={handleDeleteAll}
           />
-          {totalPages > 1 && ( // Only show pagination if there's more than one page
+          {totalPages > 1 && (
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}

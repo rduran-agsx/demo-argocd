@@ -1,53 +1,14 @@
-# base python image - slim variant for smaller size
 FROM python:3.9-slim
 
-# set working directory for all subsequent commands
 WORKDIR /app
 
-# install system dependencies:
-# gcc: needed to compile some python packages
-# postgresql-client: for postgres database commands
-# libpq-dev: postgres development headers
-# curl: for http requests and health checks 
-# netcat-openbsd: checks if services/ports are available
-# clean up apt cache after to reduce image size
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    libpq-dev \
-    curl \
-    netcat-openbsd \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y gcc postgresql-client libpq-dev && rm -rf /var/lib/apt/lists/*
 
-# copy requirements first to leverage docker cache
 COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-# install python packages
-# --no-cache-dir: don't cache downloaded packages, reduces image size
-RUN pip install --no-cache-dir -r requirements.txt
-
-# copy application code into container
-# the volume mount will override this in development
 COPY . .
 
-# copy and make initialization script executable
-# this script waits for db and runs migrations
-COPY init.sh /init.sh
-RUN chmod +x /init.sh
+ENV FLASK_APP=app.py FLASK_ENV=development FLASK_DEBUG=1 PYTHONUNBUFFERED=1
 
-# set flask environment:
-# FLASK_APP: main application file
-# FLASK_ENV: enable development features
-# FLASK_DEBUG: enable debug mode & auto-reload
-# PYTHONUNBUFFERED: show python logs immediately
-ENV FLASK_APP=app.py
-ENV FLASK_ENV=development
-ENV FLASK_DEBUG=1
-ENV PYTHONUNBUFFERED=1
-
-# tell docker app uses port 5000
 EXPOSE 5000
-
-# Flask's development server with reload enabled
-# initialization script runs first
-CMD ["flask", "run", "--host=0.0.0.0", "--port=5000", "--reload"]

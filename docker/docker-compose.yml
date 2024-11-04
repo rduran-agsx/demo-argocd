@@ -1,0 +1,88 @@
+version: "3.8"
+
+services:
+  frontend:
+    container_name: hiraya-frontend
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
+      - NODE_ENV=development
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - WDS_SOCKET_PORT=3000
+    volumes:
+      - ../frontend:/app:delegated
+      - /app/node_modules
+    networks:
+      - app-network
+    depends_on:
+      - backend
+
+  backend:
+    container_name: hiraya-backend
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.backend
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_APP=app.py
+      - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://hiraya-admin:password@db:5432/hiraya-db
+    volumes:
+      - ../backend:/app:delegated
+      - ../backend/providers:/app/providers
+      - /app/__pycache__
+      - /app/*.pyc
+    networks:
+      - app-network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+    command: >
+      sh -c "
+        apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/* &&
+        echo 'Waiting for database...' &&
+        while ! nc -z db 5432; do
+          sleep 1
+        done &&
+        echo 'Database is ready!' &&
+        python scripts/init_db.py &&
+        python scripts/migrate_providers.py &&
+        python scripts/verify_db.py &&
+        flask run --host=0.0.0.0 --port=5000 --reload
+      "
+
+  db:
+    container_name: hiraya-db
+    image: postgres:14-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=hiraya-admin
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=hiraya-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hiraya-admin -d hiraya-db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge

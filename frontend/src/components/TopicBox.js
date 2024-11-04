@@ -5,10 +5,9 @@ const TopicBox = ({ topicNumber, examCode, examTitle }) => {
   const { colorMode } = useColorMode();
   const capitalizedExamCode = examCode.toUpperCase();
 
-  // Gradient colors adjusted for light/dark modes
   const gradientColors = {
-    light: "linear(to top left, #F7941E, #72C6EF, #00A651)", // Original bright gradient
-    dark: "linear(to top left, #B55F0C, #2F7A9E, #00733A)"   // Darker, more muted version
+    light: "linear(to top left, #F7941E, #72C6EF, #00A651)",
+    dark: "linear(to top left, #B55F0C, #2F7A9E, #00733A)"
   };
 
   return (

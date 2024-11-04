@@ -49,7 +49,6 @@ const ProviderInfoCard = ({ provider, view }) => {
   };
 
   if (view === "grid") {
-    // Grid view remains the same as your current code
     return (
       <Box
         backgroundColor={
@@ -233,7 +232,6 @@ const ProviderInfoCard = ({ provider, view }) => {
       </Box>
     );
   } else {
-    // List view adjustments
     return (
       <Flex
         direction={{ base: "column", sm: "row" }}

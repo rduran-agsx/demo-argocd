@@ -1,6 +1,13 @@
-# backend/migrate_providers.py
+# backend/scripts/migrate_providers.py
 
 import os
+import sys
+from pathlib import Path
+
+script_dir = Path(__file__).resolve().parent
+backend_dir = script_dir.parent
+sys.path.append(str(backend_dir))
+
 import json
 import re
 import logging
@@ -13,17 +20,14 @@ logger = logging.getLogger(__name__)
 
 def parse_exam_file(filename):
     """Parse exam filename to extract title, code and topic number."""
-    # Remove .json extension
     filename = filename.replace('.json', '')
     
-    # Extract topic number if present
     topic_number = 1
     topic_match = re.search(r'__topic-(\d+)', filename)
     if topic_match:
         topic_number = int(topic_match.group(1))
         filename = re.sub(r'__topic-\d+', '', filename)
     
-    # Extract exam code
     code_match = re.search(r'-code-([^_]+)', filename)
     exam_code = ''
     if code_match:
@@ -43,14 +47,13 @@ def get_exam_title_from_code(exam_title, exam_code):
 def migrate_providers_to_db():
     """Migrates exam data to database, properly handling multi-topic exams."""
     try:
-        root_dir = 'providers'
+        root_dir = os.path.join(backend_dir, 'providers')
         stats = {
             'providers_migrated': 0,
             'exams_migrated': 0,
             'topics_migrated': 0
         }
 
-        # Process each provider
         for provider_name in os.listdir(root_dir):
             provider_path = os.path.join(root_dir, provider_name)
             if not os.path.isdir(provider_path):
@@ -58,7 +61,6 @@ def migrate_providers_to_db():
 
             logger.info(f"Processing provider: {provider_name}")
 
-            # Create or get provider
             provider = Provider.query.filter_by(name=provider_name).first()
             if not provider:
                 provider = Provider(
@@ -69,7 +71,6 @@ def migrate_providers_to_db():
                 db.session.commit()
                 stats['providers_migrated'] += 1
 
-            # Group exam files by base name (without topic numbers)
             exam_groups = {}
             for exam_file in os.listdir(provider_path):
                 if not exam_file.endswith('.json'):
@@ -91,13 +92,11 @@ def migrate_providers_to_db():
                     'file_name': exam_file
                 })
 
-            # Process each unique exam
             for base_key, topic_files in exam_groups.items():
                 exam_title, exam_code, _ = parse_exam_file(base_key)
                 display_title = get_exam_title_from_code(exam_title, exam_code)
                 exam_id = f"{provider.name}-{exam_title}-code-{exam_code}"
 
-                # Create or update exam
                 exam = Exam.query.get(exam_id)
                 if not exam:
                     total_questions = sum(len(topic['data']) for topic in topic_files)
@@ -110,7 +109,6 @@ def migrate_providers_to_db():
                     db.session.add(exam)
                     stats['exams_migrated'] += 1
 
-                # Process topics for this exam
                 for topic_info in topic_files:
                     topic = Topic.query.filter_by(
                         exam_id=exam_id,
