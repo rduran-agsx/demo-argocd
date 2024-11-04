@@ -1,0 +1,43 @@
+# use node 18 with alpine linux - much smaller than default node image
+# alpine is minimal linux distro, good for containers
+FROM node:18-alpine
+
+# set /app as working directory
+# this is where all subsequent commands will run
+WORKDIR /app
+
+# copy package files first, before rest of code
+# package.json: defines project dependencies
+# package-lock.json: locks dependency versions
+# copying these first utilizes docker's cache for faster builds
+COPY package*.json ./
+
+# install node dependencies using npm
+# creates node_modules directory with all required packages
+# in production, you'd add --production flag to skip dev dependencies
+RUN npm install
+
+# copy rest of application code
+# done after npm install to leverage cache
+# if only code changes, dependencies won't reinstall
+# in development, this will be overridden by volume mount
+COPY . .
+
+# set environment variables for development:
+# NODE_ENV: enables development features
+# REACT_APP_API_URL: tells react app where backend api is
+# CHOKIDAR_USEPOLLING: enables better file watching
+# WATCHPACK_POLLING: enables hot reload on windows
+ENV NODE_ENV=development
+ENV REACT_APP_API_URL=http://localhost:5000
+ENV CHOKIDAR_USEPOLLING=true
+ENV WATCHPACK_POLLING=true
+
+# inform docker that container will use port 3000
+# this is the default port for react's development server
+EXPOSE 3000
+
+# command to run when container starts
+# npm start: runs react's development server
+# includes hot reloading, error overlay, etc.
+CMD ["npm", "start"]

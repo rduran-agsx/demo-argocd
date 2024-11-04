@@ -1,0 +1,30 @@
+# Root level
+.env
+node_modules/
+*.log
+
+# Backend
+/backend/__pycache__/
+/backend/venv/
+/backend/providers/
+/backend/*.pyc
+
+# Frontend
+/frontend/node_modules/
+/frontend/.env
+/frontend/build/
+/frontend/dist/
+/frontend/public/*.svg
+
+# Other unnecessary files
+*.DS_Store
+..bfg-report/
+
+# Build and cache files
+frontend/node_modules/.cache/
+*.pack
+
+# Python virtual environment and libraries
+__pycache__/
+venv/
+*.dylib
