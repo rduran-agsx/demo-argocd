@@ -1,0 +1,41 @@
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hiraya-frontend
+  namespace: cet-rduran
+spec:
+  type: NodePort      # Added this
+  selector:
+    app: hiraya-frontend
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080   # Added this - port will be accessible externally
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hiraya-backend
+  namespace: cet-rduran
+spec:
+  type: NodePort      # Added this
+  selector:
+    app: hiraya-backend
+  ports:
+  - port: 5000
+    targetPort: 5000
+    nodePort: 30050   # Added this
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hiraya-database
+  namespace: cet-rduran
+spec:
+  selector:
+    app: hiraya-database
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None

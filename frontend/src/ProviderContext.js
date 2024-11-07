@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 const ProviderContext = createContext();
 
 export const ProviderProvider = ({ children }) => {
+  const API_URL = process.env.REACT_APP_API_URL;
+
   const [providers, setProviders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -11,7 +13,7 @@ export const ProviderProvider = ({ children }) => {
   const fetchProviders = async (page = 1) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/providers?page=${page}&per_page=10`);
+      const response = await fetch(`${API_URL}/api/providers?page=${page}&per_page=10`);
       const data = await response.json();
       setProviders(prevProviders => [...prevProviders, ...data.providers]);
       setTotalPages(data.pages);

@@ -1,0 +1,133 @@
+# configmap.yaml
+# Frontend Config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hiraya-frontend-config
+  namespace: cet-rduran
+data:
+  default.conf: |
+    server {
+      listen 80;
+      server_name _;
+
+      # Increased timeouts
+      proxy_connect_timeout 300s;
+      proxy_send_timeout 300s;
+      proxy_read_timeout 300s;
+      
+      # Increased buffer sizes
+      proxy_buffer_size 128k;
+      proxy_buffers 4 256k;
+      proxy_busy_buffers_size 256k;
+
+      location / {
+          root /usr/share/nginx/html;
+          try_files $uri $uri/ /index.html;
+          add_header Cache-Control "no-store, no-cache, must-revalidate";
+      }
+
+      location /api/ {
+          proxy_pass http://10.74.0.21:30050;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection 'upgrade';
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_cache_bypass $http_upgrade;
+          
+          # Increased timeouts for API calls
+          proxy_connect_timeout 300;
+          proxy_send_timeout 300;
+          proxy_read_timeout 300;
+          
+          # Add CORS headers
+          add_header 'Access-Control-Allow-Origin' '*' always;
+          add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+          add_header 'Access-Control-Allow-Headers' 'DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization' always;
+          
+          # Handle preflight
+          if ($request_method = 'OPTIONS') {
+              add_header 'Access-Control-Allow-Origin' '*';
+              add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE';
+              add_header 'Access-Control-Allow-Headers' 'DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization';
+              add_header 'Access-Control-Max-Age' 1728000;
+              add_header 'Content-Type' 'text/plain charset=UTF-8';
+              add_header 'Content-Length' 0;
+              return 204;
+          }
+
+          # Error handling
+          proxy_intercept_errors on;
+          error_page 404 502 503 504 = @error_json;
+      }
+
+      location @error_json {
+          return 502 '{"error":"Bad Gateway","message":"Backend service temporarily unavailable"}';
+          add_header Content-Type application/json;
+      }
+
+      # Health check endpoint
+      location /health {
+          access_log off;
+          return 200 "healthy\n";
+      }
+    }
+---
+# Backend Config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hiraya-backend-config
+  namespace: cet-rduran
+  labels:
+    app: hiraya-backend
+data:
+  FLASK_APP: app.py
+  FLASK_ENV: production
+  CORS_ORIGINS: "http://10.74.0.21:30080,http://10.74.0.22:30080,http://10.74.0.23:30080,http://10.74.0.24:30080"
+  GUNICORN_WORKERS: "4"
+  GUNICORN_THREADS: "2"
+  GUNICORN_TIMEOUT: "300"
+  GUNICORN_KEEPALIVE: "5"
+---
+# Postgres Config (New)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: cet-rduran
+data:
+  postgresql.conf: |
+    max_connections = 200
+    shared_buffers = 512MB
+    work_mem = 32MB
+    maintenance_work_mem = 128MB
+    effective_cache_size = 1GB
+    random_page_cost = 1.1
+    synchronous_commit = off
+    max_wal_size = 1GB
+    min_wal_size = 80MB
+    wal_buffers = 16MB
+    checkpoint_completion_target = 0.9
+    default_statistics_target = 500
+    effective_io_concurrency = 200
+    max_worker_processes = 8
+    max_parallel_workers_per_gather = 4
+    max_parallel_workers = 8
+    max_parallel_maintenance_workers = 4
+---
+# Postgres Init Scripts (New)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  namespace: cet-rduran
+data:
+  init.sql: |
+    ALTER SYSTEM SET max_connections = '200';
+    ALTER SYSTEM SET shared_buffers = '512MB';
+    ALTER SYSTEM SET work_mem = '32MB';
+    ALTER SYSTEM SET maintenance_work_mem = '128MB';
+    ALTER SYSTEM SET effective_cache_size = '1GB';

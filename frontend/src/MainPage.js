@@ -56,6 +56,8 @@ const LoadingSpinner = () => {
 };
 
 const MainPage = () => {
+  const API_URL = process.env.REACT_APP_API_URL;
+  
   const { colorMode } = useColorMode();
 
   // Theme-aware colors
@@ -103,7 +105,7 @@ const MainPage = () => {
     const fetchLastVisitedExam = async () => {
       try {
         const response = await fetch(
-          "http://localhost:5000/api/user-preference"
+          `${API_URL}/api/user-preference`
         );
         const data = await response.json();
         if (data.last_visited_exam) {
@@ -129,7 +131,7 @@ const MainPage = () => {
     try {
       const encodedExamId = encodeURIComponent(currentExam);
       const response = await fetch(
-        `http://localhost:5000/api/get-answers/${encodedExamId}`
+        `${API_URL}/api/get-answers/${encodedExamId}`
       );
       const data = await response.json();
       const answersMap = {};
@@ -147,7 +149,7 @@ const MainPage = () => {
     try {
       const encodedExamId = encodeURIComponent(currentExam);
       const response = await fetch(
-        `http://localhost:5000/api/incorrect-questions/${encodedExamId}`
+        `${API_URL}/api/incorrect-questions/${encodedExamId}`
       );
       const data = await response.json();
       setIncorrectQuestions(data.incorrect_questions);
@@ -162,7 +164,7 @@ const MainPage = () => {
         setExamData(null);
         const encodedExamId = encodeURIComponent(currentExam);
         const response = await fetch(
-          `http://localhost:5000/api/exams/${encodedExamId}`
+          `${API_URL}/api/exams/${encodedExamId}`
         );
 
         if (!response.ok) {
@@ -211,7 +213,7 @@ const MainPage = () => {
       const fetchFavorites = async () => {
         try {
           const response = await fetch(
-            `http://localhost:5000/api/favorites/${currentExam}`
+            `${API_URL}/api/favorites/${currentExam}`
           );
           const data = await response.json();
           setFavoriteQuestions(data.favorites);
@@ -228,7 +230,7 @@ const MainPage = () => {
     const fetchSidebarState = async () => {
       try {
         const response = await fetch(
-          "http://localhost:5000/api/sidebar-state"
+          `${API_URL}/api/sidebar-state`
         );
         const data = await response.json();
         setIsSidebarCollapsed(data.is_collapsed);
@@ -251,7 +253,7 @@ const MainPage = () => {
 
   const updateLastVisitedExam = async (examId) => {
     try {
-      await fetch("http://localhost:5000/api/user-preference", {
+      await fetch(`${API_URL}/api/user-preference`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -268,7 +270,7 @@ const MainPage = () => {
     if (!currentExam || !examData) return;
 
     try {
-      const response = await fetch("http://localhost:5000/api/favorite", {
+      const response = await fetch(`${API_URL}/api/favorite`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -314,7 +316,7 @@ const MainPage = () => {
     setIsSidebarCollapsed(newState);
 
     try {
-      await fetch("http://localhost:5000/api/sidebar-state", {
+      await fetch(`${API_URL}/api/sidebar-state`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -330,7 +332,7 @@ const MainPage = () => {
     try {
       const encodedExamId = encodeURIComponent(examId);
 
-      await fetch("http://localhost:5000/api/track-exam-visit", {
+      await fetch(`${API_URL}/api/track-exam-visit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -386,7 +388,7 @@ const MainPage = () => {
   const submitExam = async () => {
     try {
       const response = await fetch(
-        "http://localhost:5000/api/submit-answers",
+        `${API_URL}/api/submit-answers`,
         {
           method: "POST",
           headers: {
@@ -440,7 +442,7 @@ const MainPage = () => {
     const currentQuestionId = `T${currentTopic} Q${currentQuestionIndex + 1}`;
 
     try {
-      await fetch("http://localhost:5000/api/save-answer", {
+      await fetch(`${API_URL}/api/save-answer`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

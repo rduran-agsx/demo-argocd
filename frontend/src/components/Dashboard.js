@@ -1348,6 +1348,8 @@ const CustomDashboardTable = ({ data, onDeleteSelected, onDeleteAll }) => {
 };
 
 const Dashboard = () => {
+  const API_URL = process.env.REACT_APP_API_URL;
+
   const [showMobileApps, setShowMobileApps] = useState(true);
   const [showSupport, setShowSupport] = useState(true);
   const [examProgress, setExamProgress] = useState([]);
@@ -1388,7 +1390,7 @@ const Dashboard = () => {
       if (!isMounted.current) return;
       setIsLoading(true);
 
-      const response = await fetch("http://localhost:5000/api/exam-progress", {
+      const response = await fetch(`${API_URL}/api/exam-progress`, {
         signal: abortControllerRef.current.signal,
       });
 
@@ -1450,7 +1452,7 @@ const Dashboard = () => {
   const handleConfirmDelete = async () => {
     try {
       if (deleteType === "all") {
-        await fetch("http://localhost:5000/api/delete-all-progress", {
+        await fetch(`${API_URL}/api/delete-all-progress`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
@@ -1481,7 +1483,7 @@ const Dashboard = () => {
         );
 
         if (providerGroups.providers.length > 0) {
-          await fetch("http://localhost:5000/api/delete-provider-exams", {
+          await fetch(`${API_URL}/api/delete-provider-exams`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ provider_names: providerGroups.providers }),
@@ -1489,7 +1491,7 @@ const Dashboard = () => {
         }
 
         if (providerGroups.exams.length > 0) {
-          await fetch("http://localhost:5000/api/delete-exams", {
+          await fetch(`${API_URL}/api/delete-exams`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ exam_ids: providerGroups.exams }),

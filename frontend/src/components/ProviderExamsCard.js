@@ -41,6 +41,8 @@ const LoadingSpinner = () => {
 };
 
 const ProviderExamsCard = ({ onExamSelect, view, onViewChange }) => {
+  const API_URL = process.env.REACT_APP_API_URL;
+  
   const location = useLocation();
   const { colorMode } = useColorMode();
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -60,7 +62,7 @@ const ProviderExamsCard = ({ onExamSelect, view, onViewChange }) => {
   const fetchProviders = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/providers`);
+      const response = await fetch(`${API_URL}/api/providers`);
       const data = await response.json();
       setProviders(data.providers);
     } catch (error) {

@@ -372,158 +372,246 @@ def get_incorrect_questions(exam_id):
 
 @app.route('/api/exam-progress', methods=['GET'])
 def get_exam_progress():
-    user_id = 1
-    
-    base_query = db.session.query(Exam).distinct().join(
-        Provider,
-        Exam.provider_id == Provider.id
-    )
-
-    exam_queries = [
-        base_query.join(UserAnswer, UserAnswer.exam_id == Exam.id).filter(UserAnswer.user_id == user_id),
-        base_query.join(ExamAttempt, ExamAttempt.exam_id == Exam.id).filter(ExamAttempt.user_id == user_id),
-        base_query.join(ExamVisit, ExamVisit.exam_id == Exam.id).filter(ExamVisit.user_id == user_id),
-        base_query.join(UserPreference, UserPreference.last_visited_exam == Exam.id).filter(UserPreference.user_id == user_id)
-    ]
-
-    final_query = exam_queries[0]
-    for query in exam_queries[1:]:
-        final_query = final_query.union(query)
-
-    user_exams = final_query.all()
-
-    provider_data = {}
-    for exam in user_exams:
-        total_questions = exam.total_questions
+    try:
+        user_id = 1
         
-        answered_questions = UserAnswer.query.filter_by(
-            user_id=user_id,
-            exam_id=exam.id
-        ).count()
+        # Debug log
+        print("Starting exam progress fetch for user_id:", user_id)
         
-        progress = round((answered_questions / total_questions * 100) if total_questions > 0 else 0, 1)
-        
-        attempts = ExamAttempt.query.filter_by(
-            user_id=user_id,
-            exam_id=exam.id
-        ).order_by(ExamAttempt.attempt_date.desc()).all()
-        
-        attempt_count = len(attempts)
-        latest_grade = None
-        average_score = 0
-        status = "Not Attempted"
-        
-        if attempt_count > 0:
-            latest_attempt = attempts[0]
-            correct_answers = round((latest_attempt.score / 100) * latest_attempt.total_questions)
-            latest_grade = {
-                'score': correct_answers,
-                'total': latest_attempt.total_questions
-            }
-            status = "Passed" if latest_attempt.score >= 75 else "Failed"
-            average_score = round(sum(attempt.score for attempt in attempts) / attempt_count, 2)
-        
-        last_update = None
-        if attempts:
-            time_diff = datetime.utcnow() - attempts[0].attempt_date
-            if time_diff.days == 0:
-                if time_diff.seconds < 3600:
-                    if time_diff.seconds < 300:
-                        last_update = "Just now"
-                    else:
-                        minutes = time_diff.seconds // 60
-                        last_update = f"{minutes} {'minute' if minutes == 1 else 'minutes'} ago"
-                else:
-                    hours = time_diff.seconds // 3600
-                    last_update = f"{hours} {'hour' if hours == 1 else 'hours'} ago"
-            elif time_diff.days == 1:
-                last_update = "Yesterday"
-            elif time_diff.days < 7:
-                last_update = f"{time_diff.days} {'day' if time_diff.days == 1 else 'days'} ago"
-            elif time_diff.days < 30:
-                weeks = time_diff.days // 7
-                last_update = f"{weeks} {'week' if weeks == 1 else 'weeks'} ago"
-            else:
-                months = time_diff.days // 30
-                last_update = f"{months} {'month' if months == 1 else 'months'} ago"
-        else:
-            last_answer = UserAnswer.query.filter_by(
-                user_id=user_id,
-                exam_id=exam.id
-            ).order_by(UserAnswer.id.desc()).first()
+        try:
+            base_query = db.session.query(Exam).distinct().join(
+                Provider,
+                Exam.provider_id == Provider.id
+            )
             
-            if last_answer:
-                last_update = "In Progress"
-            else:
-                visit = ExamVisit.query.filter_by(
-                    user_id=user_id,
-                    exam_id=exam.id
-                ).first()
-                
-                if visit:
-                    time_diff = datetime.utcnow() - visit.last_visit_date
-                    if time_diff.days == 0:
-                        if time_diff.seconds < 3600:
-                            if time_diff.seconds < 300:
-                                last_update = "Just now"
-                            else:
-                                minutes = time_diff.seconds // 60
-                                last_update = f"{minutes} {'minute' if minutes == 1 else 'minutes'} ago"
-                        else:
-                            hours = time_diff.seconds // 3600
-                            last_update = f"{hours} {'hour' if hours == 1 else 'hours'} ago"
-                    elif time_diff.days == 1:
-                        last_update = "Yesterday"
-                    elif time_diff.days < 7:
-                        last_update = f"{time_diff.days} {'day' if time_diff.days == 1 else 'days'} ago"
-                    elif time_diff.days < 30:
-                        weeks = time_diff.days // 7
-                        last_update = f"{weeks} {'week' if weeks == 1 else 'weeks'} ago"
-                    else:
-                        months = time_diff.days // 30
-                        last_update = f"{months} {'month' if months == 1 else 'months'} ago"
-                else:
-                    last_update = "Not Started"
+            # Create individual queries with error handling
+            exam_queries = []
+            
+            # UserAnswer join
+            try:
+                user_answer_query = base_query.join(
+                    UserAnswer, 
+                    UserAnswer.exam_id == Exam.id
+                ).filter(UserAnswer.user_id == user_id)
+                exam_queries.append(user_answer_query)
+            except Exception as e:
+                print(f"Error in UserAnswer join: {str(e)}")
+            
+            # ExamAttempt join
+            try:
+                exam_attempt_query = base_query.join(
+                    ExamAttempt, 
+                    ExamAttempt.exam_id == Exam.id
+                ).filter(ExamAttempt.user_id == user_id)
+                exam_queries.append(exam_attempt_query)
+            except Exception as e:
+                print(f"Error in ExamAttempt join: {str(e)}")
+            
+            # ExamVisit join
+            try:
+                exam_visit_query = base_query.join(
+                    ExamVisit, 
+                    ExamVisit.exam_id == Exam.id
+                ).filter(ExamVisit.user_id == user_id)
+                exam_queries.append(exam_visit_query)
+            except Exception as e:
+                print(f"Error in ExamVisit join: {str(e)}")
+            
+            # UserPreference join
+            try:
+                user_pref_query = base_query.join(
+                    UserPreference, 
+                    UserPreference.last_visited_exam == Exam.id
+                ).filter(UserPreference.user_id == user_id)
+                exam_queries.append(user_pref_query)
+            except Exception as e:
+                print(f"Error in UserPreference join: {str(e)}")
 
-        timestamp = None
-        if attempts:
-            timestamp = attempts[0].attempt_date.timestamp() * 1000
-        elif 'visit' in locals() and visit:
-            timestamp = visit.last_visit_date.timestamp() * 1000
-        elif last_answer:
-            timestamp = datetime.utcnow().timestamp() * 1000
+            if not exam_queries:
+                print("No valid queries constructed")
+                return jsonify({'providers': []})
 
-        exam_data = {
-            'id': exam.id,
-            'exam': format_display_title(exam.title),
-            'examType': 'Actual',
-            'attempts': attempt_count,
-            'averageScore': average_score,
-            'progress': progress,
-            'latestGrade': latest_grade or {
-                'score': 0,
-                'total': total_questions
-            },
-            'status': status,
-            'timestamp': timestamp,
-            'updated': last_update
-        }
+            # Combine queries
+            final_query = exam_queries[0]
+            for query in exam_queries[1:]:
+                final_query = final_query.union(query)
+
+            user_exams = final_query.all()
+            print(f"Found {len(user_exams)} exams for user")
+
+        except Exception as e:
+            print(f"Error in query construction: {str(e)}")
+            return jsonify({'error': 'Database query error', 'message': str(e)}), 500
+
+        provider_data = {}
         
-        provider_name = exam.provider.name
-        if provider_name not in provider_data:
-            provider_data[provider_name] = {
-                'name': provider_name,
-                'exams': [],
-                'isPopular': exam.provider.is_popular
-            }
-        provider_data[provider_name]['exams'].append(exam_data)
+        for exam in user_exams:
+            try:
+                total_questions = exam.total_questions
+                
+                # Get answered questions count
+                try:
+                    answered_questions = UserAnswer.query.filter_by(
+                        user_id=user_id,
+                        exam_id=exam.id
+                    ).count()
+                except Exception as e:
+                    print(f"Error counting answered questions for exam {exam.id}: {str(e)}")
+                    answered_questions = 0
 
-        provider_data[provider_name]['exams'].sort(
-            key=lambda x: x['timestamp'] if x['timestamp'] else 0,
-            reverse=True
-        )
+                progress = round((answered_questions / total_questions * 100) if total_questions > 0 else 0, 1)
+                
+                # Get exam attempts
+                try:
+                    attempts = ExamAttempt.query.filter_by(
+                        user_id=user_id,
+                        exam_id=exam.id
+                    ).order_by(ExamAttempt.attempt_date.desc()).all()
+                except Exception as e:
+                    print(f"Error fetching attempts for exam {exam.id}: {str(e)}")
+                    attempts = []
+                
+                attempt_count = len(attempts)
+                latest_grade = None
+                average_score = 0
+                status = "Not Attempted"
+                
+                if attempt_count > 0:
+                    try:
+                        latest_attempt = attempts[0]
+                        correct_answers = round((latest_attempt.score / 100) * latest_attempt.total_questions)
+                        latest_grade = {
+                            'score': correct_answers,
+                            'total': latest_attempt.total_questions
+                        }
+                        status = "Passed" if latest_attempt.score >= 75 else "Failed"
+                        average_score = round(sum(attempt.score for attempt in attempts) / attempt_count, 2)
+                    except Exception as e:
+                        print(f"Error processing attempt data for exam {exam.id}: {str(e)}")
+                
+                # Get last update information
+                try:
+                    last_update = None
+                    timestamp = None
+                    
+                    if attempts:
+                        time_diff = datetime.utcnow() - attempts[0].attempt_date
+                        timestamp = attempts[0].attempt_date.timestamp() * 1000
+                        
+                        if time_diff.days == 0:
+                            if time_diff.seconds < 3600:
+                                if time_diff.seconds < 300:
+                                    last_update = "Just now"
+                                else:
+                                    minutes = time_diff.seconds // 60
+                                    last_update = f"{minutes} {'minute' if minutes == 1 else 'minutes'} ago"
+                            else:
+                                hours = time_diff.seconds // 3600
+                                last_update = f"{hours} {'hour' if hours == 1 else 'hours'} ago"
+                        elif time_diff.days == 1:
+                            last_update = "Yesterday"
+                        elif time_diff.days < 7:
+                            last_update = f"{time_diff.days} {'day' if time_diff.days == 1 else 'days'} ago"
+                        elif time_diff.days < 30:
+                            weeks = time_diff.days // 7
+                            last_update = f"{weeks} {'week' if weeks == 1 else 'weeks'} ago"
+                        else:
+                            months = time_diff.days // 30
+                            last_update = f"{months} {'month' if months == 1 else 'months'} ago"
+                    else:
+                        last_answer = UserAnswer.query.filter_by(
+                            user_id=user_id,
+                            exam_id=exam.id
+                        ).order_by(UserAnswer.id.desc()).first()
+                        
+                        if last_answer:
+                            last_update = "In Progress"
+                            timestamp = datetime.utcnow().timestamp() * 1000
+                        else:
+                            visit = ExamVisit.query.filter_by(
+                                user_id=user_id,
+                                exam_id=exam.id
+                            ).first()
+                            
+                            if visit:
+                                time_diff = datetime.utcnow() - visit.last_visit_date
+                                timestamp = visit.last_visit_date.timestamp() * 1000
+                                
+                                if time_diff.days == 0:
+                                    if time_diff.seconds < 3600:
+                                        if time_diff.seconds < 300:
+                                            last_update = "Just now"
+                                        else:
+                                            minutes = time_diff.seconds // 60
+                                            last_update = f"{minutes} {'minute' if minutes == 1 else 'minutes'} ago"
+                                    else:
+                                        hours = time_diff.seconds // 3600
+                                        last_update = f"{hours} {'hour' if hours == 1 else 'hours'} ago"
+                                elif time_diff.days == 1:
+                                    last_update = "Yesterday"
+                                elif time_diff.days < 7:
+                                    last_update = f"{time_diff.days} {'day' if time_diff.days == 1 else 'days'} ago"
+                                elif time_diff.days < 30:
+                                    weeks = time_diff.days // 7
+                                    last_update = f"{weeks} {'week' if weeks == 1 else 'weeks'} ago"
+                                else:
+                                    months = time_diff.days // 30
+                                    last_update = f"{months} {'month' if months == 1 else 'months'} ago"
+                            else:
+                                last_update = "Not Started"
+                                
+                except Exception as e:
+                    print(f"Error calculating last update for exam {exam.id}: {str(e)}")
+                    last_update = "Unknown"
+                    timestamp = None
 
-    return jsonify({'providers': list(provider_data.values())})
+                exam_data = {
+                    'id': exam.id,
+                    'exam': format_display_title(exam.title),
+                    'examType': 'Actual',
+                    'attempts': attempt_count,
+                    'averageScore': average_score,
+                    'progress': progress,
+                    'latestGrade': latest_grade or {
+                        'score': 0,
+                        'total': total_questions
+                    },
+                    'status': status,
+                    'timestamp': timestamp,
+                    'updated': last_update
+                }
+                
+                provider_name = exam.provider.name
+                if provider_name not in provider_data:
+                    provider_data[provider_name] = {
+                        'name': provider_name,
+                        'exams': [],
+                        'isPopular': exam.provider.is_popular
+                    }
+                provider_data[provider_name]['exams'].append(exam_data)
+
+            except Exception as e:
+                print(f"Error processing exam {exam.id}: {str(e)}")
+                continue
+
+        # Sort exams by timestamp
+        for provider in provider_data.values():
+            try:
+                provider['exams'].sort(
+                    key=lambda x: x['timestamp'] if x['timestamp'] else 0,
+                    reverse=True
+                )
+            except Exception as e:
+                print(f"Error sorting exams for provider {provider['name']}: {str(e)}")
+
+        return jsonify({'providers': list(provider_data.values())})
+
+    except Exception as e:
+        print(f"Unhandled error in get_exam_progress: {str(e)}")
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e) if app.debug else 'An unexpected error occurred'
+        }), 500
 
 @app.route('/api/track-exam-visit', methods=['POST'])
 def track_exam_visit():
@@ -681,12 +769,16 @@ def delete_all_progress():
 
 @app.route('/api/sidebar-state', methods=['GET'])
 def get_sidebar_state():
-    user_id = 1
-    preference = UserPreference.query.filter_by(user_id=user_id).first()
-    
-    if preference:
-        return jsonify({'is_collapsed': preference.is_sidebar_collapsed})
-    return jsonify({'is_collapsed': False})
+    try:
+        user_id = 1
+        preference = UserPreference.query.filter_by(user_id=user_id).first()
+        
+        if preference:
+            return jsonify({'is_collapsed': preference.is_sidebar_collapsed if hasattr(preference, 'is_sidebar_collapsed') else False})
+        return jsonify({'is_collapsed': False})
+    except Exception as e:
+        print(f"Error getting sidebar state: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
 
 @app.route('/api/sidebar-state', methods=['POST'])
 def update_sidebar_state():
@@ -763,3 +855,56 @@ def health_check():
         return jsonify({'status': 'healthy', 'database': 'connected'}), 200
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'database': str(e)}), 500
+    
+# Add this at the end of your routes.py file
+@app.errorhandler(Exception)
+def handle_error(error):
+    print(f"Unhandled error: {str(error)}")
+    response = {
+        "error": "Internal server error",
+        "message": str(error) if app.debug else "An unexpected error occurred"
+    }
+    return jsonify(response), 500
+
+@app.route('/api/debug/sidebar-state', methods=['GET'])
+def debug_sidebar_state():
+    try:
+        user_id = 1
+        preference = UserPreference.query.filter_by(user_id=user_id).first()
+        return jsonify({
+            'preference_exists': preference is not None,
+            'has_sidebar_collapsed': hasattr(preference, 'is_sidebar_collapsed') if preference else False,
+            'sidebar_collapsed': preference.is_sidebar_collapsed if preference and hasattr(preference, 'is_sidebar_collapsed') else None
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/debug/exam-progress', methods=['GET'])
+def debug_exam_progress():
+    try:
+        user_id = 1
+        
+        # Check database connectivity
+        db.session.execute(text('SELECT 1'))
+        
+        # Get counts
+        exam_count = Exam.query.count()
+        provider_count = Provider.query.count()
+        user_answer_count = UserAnswer.query.filter_by(user_id=user_id).count()
+        exam_attempt_count = ExamAttempt.query.filter_by(user_id=user_id).count()
+        exam_visit_count = ExamVisit.query.filter_by(user_id=user_id).count()
+        
+        return jsonify({
+            'database_connected': True,
+            'total_exams': exam_count,
+            'total_providers': provider_count,
+            'user_answers': user_answer_count,
+            'exam_attempts': exam_attempt_count,
+            'exam_visits': exam_visit_count,
+            'user_id': user_id
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'database_connected': False
+        }), 500

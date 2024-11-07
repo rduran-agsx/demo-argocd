@@ -1,0 +1,178 @@
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hiraya-frontend
+  namespace: cet-rduran
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hiraya-frontend
+  template:
+    metadata:
+      labels:
+        app: hiraya-frontend
+    spec:
+      containers:
+      - name: hiraya-frontend
+        image: amihanglobal/hiraya_application:frontend_prod
+        imagePullPolicy: Always
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: hiraya-frontend-config
+          mountPath: /etc/nginx/conf.d
+          readOnly: true
+        env:
+        - name: REACT_APP_API_URL
+          value: "http://10.74.0.21:30050"
+        - name: NODE_ENV
+          value: "production"
+        - name: PUBLIC_URL
+          value: "http://10.74.0.21:30080"
+      volumes:
+      - name: hiraya-frontend-config
+        configMap:
+          name: hiraya-frontend-config
+      imagePullSecrets:
+      - name: dockerhub-image-pull-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hiraya-backend
+  namespace: cet-rduran
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hiraya-backend
+  template:
+    metadata:
+      labels:
+        app: hiraya-backend
+    spec:
+      initContainers:
+      - name: wait-for-db
+        image: postgres:14-alpine
+        command: ['sh', '-c', 
+          'until pg_isready -h hiraya-database -U $POSTGRES_USER; do echo waiting for database; sleep 2; done;']
+        env:
+          - name: POSTGRES_USER
+            valueFrom:
+              secretKeyRef:
+                name: hiraya-database-secret
+                key: DB_USER
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: hiraya-database-secret
+                key: DB_PASSWORD
+      containers:
+      - name: hiraya-backend
+        image: amihanglobal/hiraya_application:backend_prod
+        imagePullPolicy: Always
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+            scheme: HTTP
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 15
+          successThreshold: 1
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 15
+          successThreshold: 1
+          failureThreshold: 6
+        command: ["/app/scripts/init-backend.sh"]
+        env:
+        - name: FLASK_APP
+          valueFrom:
+            configMapKeyRef:
+              key: FLASK_APP
+              name: hiraya-backend-config
+        - name: FLASK_ENV
+          valueFrom:
+            configMapKeyRef:
+              key: FLASK_ENV
+              name: hiraya-backend-config
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              key: DB_USER
+              name: hiraya-database-secret
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: DB_PASSWORD
+              name: hiraya-database-secret
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              key: DB_NAME
+              name: hiraya-database-secret
+        - name: DATABASE_URL
+          value: postgresql://$(DB_USER):$(DB_PASSWORD)@hiraya-database:5432/$(DB_NAME)
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: CORS_ORIGINS
+          value: "http://10.74.0.21:30080,http://10.74.0.22:30080,http://10.74.0.23:30080,http://10.74.0.24:30080"
+        - name: API_URL
+          value: "http://10.74.0.21:30050"
+        - name: DEBUG
+          value: "False"
+        # SQLAlchemy settings
+        - name: SQLALCHEMY_POOL_SIZE
+          value: "30"
+        - name: SQLALCHEMY_MAX_OVERFLOW
+          value: "10"
+        - name: SQLALCHEMY_POOL_TIMEOUT
+          value: "60"
+        - name: SQLALCHEMY_POOL_RECYCLE
+          value: "1800"
+        # Gunicorn settings
+        - name: GUNICORN_WORKERS
+          value: "4"
+        - name: GUNICORN_THREADS
+          value: "4"
+        - name: GUNICORN_TIMEOUT
+          value: "300"
+        - name: GUNICORN_KEEPALIVE
+          value: "5"
+        resources:
+          limits:
+            memory: "6Gi"
+            cpu: "3000m"
+          requests:
+            memory: "3Gi"
+            cpu: "1500m"
+        ports:
+        - containerPort: 5000
+      imagePullSecrets:
+      - name: dockerhub-image-pull-secret
