@@ -25,7 +25,9 @@ spec:
             command:
               - pg_isready
               - -U
-              - $(POSTGRES_USER)
+              - hiraya-admin
+              - -d
+              - hiraya-db
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 10
@@ -36,26 +38,22 @@ spec:
             command:
               - pg_isready
               - -U
-              - $(POSTGRES_USER)
+              - hiraya-admin
+              - -d
+              - hiraya-db
           initialDelaySeconds: 60
           periodSeconds: 15
           timeoutSeconds: 5
         env:
         - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              key: DB_USER
-              name: hiraya-database-secret
+          value: "hiraya-admin"
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
               key: DB_PASSWORD
               name: hiraya-database-secret
         - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              key: DB_NAME
-              name: hiraya-database-secret
+          value: "hiraya-db"
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
         # PostgreSQL Performance Tuning

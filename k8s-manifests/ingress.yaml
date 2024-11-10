@@ -18,24 +18,24 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-buffer-size: 128k
 spec:
   rules:
-  - host: hiraya.amihan.net
-    http:
-      paths:
-      - path: /
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: hiraya-frontend
-            port:
-              number: 80
-      - path: /api/
-        pathType: ImplementationSpecific
-        backend:
-          service:
-            name: hiraya-backend
-            port:
-              number: 5000
+    - host: hiraya.amihan.net
+      http:
+        paths:
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: hiraya-backend
+                port:
+                  number: 5000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hiraya-frontend
+                port:
+                  number: 80
   tls:
-  - hosts:
-    - hiraya.amihan.net
-    secretName: hiraya-tls
+    - hosts:
+        - hiraya.amihan.net
+      secretName: hiraya-tls

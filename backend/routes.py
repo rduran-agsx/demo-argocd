@@ -1,13 +1,79 @@
 # backend/routes.py
 
-from flask import jsonify, abort, request
-from app import app, db
+from flask import jsonify, abort, request, current_app, Blueprint
+from app import db
 from models import Provider, Exam, Topic, UserPreference, FavoriteQuestion, UserAnswer, ExamAttempt, ExamVisit
 from utils import get_exam_order, format_display_title
 from provider_categories import get_provider_categories, get_total_providers, get_total_categories
 from urllib.parse import unquote
 from sqlalchemy import func, text
 from datetime import datetime
+from functools import wraps
+import jwt
+from auth import User
+
+# Create blueprint
+routes_bp = Blueprint('routes', __name__, url_prefix='/api')
+
+def handle_route_error(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            current_app.logger.error(f"Error in {func.__name__}: {str(e)}")
+            db.session.rollback()
+            return jsonify({
+                'error': 'Internal server error',
+                'message': str(e) if current_app.debug else 'An unexpected error occurred'
+            }), 500
+    return wrapper
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'No token provided'}), 401
+
+        token = auth_header.split(' ')[1]
+        try:
+            payload = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+            user = User.query.get(payload['user_id'])
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+            return f(user, *args, **kwargs)
+
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    return decorated
+
+# Register error handlers using the blueprint
+@routes_bp.errorhandler(404)
+def not_found_error(error):
+    return jsonify({"error": "Not found", "message": str(error)}), 404
+
+@routes_bp.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return jsonify({
+        "error": "Internal server error",
+        "message": str(error) if current_app.debug else "An unexpected error occurred"
+    }), 500
+
+@routes_bp.errorhandler(Exception)
+def handle_error(error):
+    current_app.logger.error(f"Unhandled error: {str(error)}")
+    db.session.rollback()
+    return jsonify({
+        "error": "Internal server error",
+        "message": str(error) if current_app.debug else "An unexpected error occurred"
+    }), 500
 
 def get_provider_description(provider_name):
     """Get provider description from provider_categories data"""
@@ -18,8 +84,10 @@ def get_provider_description(provider_name):
                 return provider['description']
     return f"Official certification exams from {provider_name}"
 
-@app.route('/api/providers', methods=['GET'])
+# Public routes that don't require authentication
+@routes_bp.route('/providers', methods=['GET'])
 def get_providers():
+    # This route remains unchanged as it's public
     page = request.args.get('page', type=int)
     per_page = request.args.get('per_page', type=int)
     
@@ -92,13 +160,14 @@ def get_providers():
             'current_page': page
         })
 
-@app.route('/api/exams/<exam_id>', methods=['GET'])
-def get_exam(exam_id):
+# Protected routes that require authentication
+@routes_bp.route('/exams/<exam_id>', methods=['GET'])
+@require_auth
+def get_exam(user, exam_id):
     if exam_id == 'undefined' or '-' not in exam_id:
         abort(400, description="Invalid exam ID")
     
     exam_id = unquote(exam_id)
-    
     provider_name, exam_title_with_code = exam_id.split('-', 1)
     
     provider = Provider.query.filter_by(name=provider_name).first()
@@ -128,62 +197,59 @@ def get_exam(exam_id):
     }
     
     try:
-        user_id = 1
-        
         visit = ExamVisit.query.filter_by(
-            user_id=user_id,
+            user_id=user.id,
             exam_id=exam.id
         ).first()
         
         if not visit:
             visit = ExamVisit(
-                user_id=user_id,
+                user_id=user.id,
                 exam_id=exam.id
             )
             db.session.add(visit)
         else:
             visit.last_visit_date = datetime.utcnow()
         
-        preference = UserPreference.query.filter_by(user_id=user_id).first()
+        preference = UserPreference.query.filter_by(user_id=user.id).first()
         if preference:
             preference.last_visited_exam = exam.id
         else:
-            preference = UserPreference(user_id=user_id, last_visited_exam=exam.id)
+            preference = UserPreference(user_id=user.id, last_visited_exam=exam.id)
             db.session.add(preference)
         
         db.session.commit()
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error tracking exam visit: {str(e)}")
+        print(f"Error tracking exam visit: {str(e)}")
     
     return jsonify(exam_data)
 
-@app.route('/api/user-preference', methods=['GET', 'POST'])
-def user_preference():
-    user_id = 1
-
+@routes_bp.route('/user-preference', methods=['GET', 'POST'])
+@require_auth
+def user_preference(user):
     if request.method == 'GET':
-        preference = UserPreference.query.filter_by(user_id=user_id).first()
+        preference = UserPreference.query.filter_by(user_id=user.id).first()
         if preference:
             return jsonify({'last_visited_exam': preference.last_visited_exam})
         return jsonify({'last_visited_exam': None})
 
     elif request.method == 'POST':
         data = request.json
-        preference = UserPreference.query.filter_by(user_id=user_id).first()
+        preference = UserPreference.query.filter_by(user_id=user.id).first()
         if preference:
             preference.last_visited_exam = data['last_visited_exam']
         else:
-            preference = UserPreference(user_id=user_id, last_visited_exam=data['last_visited_exam'])
+            preference = UserPreference(user_id=user.id, last_visited_exam=data['last_visited_exam'])
             db.session.add(preference)
         db.session.commit()
         return jsonify({'message': 'Preference updated successfully'})
 
-@app.route('/api/favorite', methods=['POST'])
-def favorite_question():
+@routes_bp.route('/favorite', methods=['POST'])
+@require_auth
+def favorite_question(user):
     data = request.json
-    user_id = 1
     exam_id = unquote(data['exam_id'])
     topic_number = data['topic_number']
     question_index = data['question_index']
@@ -204,7 +270,7 @@ def favorite_question():
         exam_id = exam.id
 
     favorite = FavoriteQuestion.query.filter_by(
-        user_id=user_id,
+        user_id=user.id,
         exam_id=exam_id,
         topic_number=topic_number,
         question_index=question_index
@@ -217,7 +283,7 @@ def favorite_question():
             return jsonify({'message': 'Question unfavorited successfully', 'is_favorite': False}), 200
         else:
             new_favorite = FavoriteQuestion(
-                user_id=user_id,
+                user_id=user.id,
                 exam_id=exam_id,
                 topic_number=topic_number,
                 question_index=question_index
@@ -229,10 +295,14 @@ def favorite_question():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/favorites/<exam_id>', methods=['GET'])
-def get_favorite_questions(exam_id):
-    user_id = 1
-    favorites = FavoriteQuestion.query.filter_by(user_id=user_id, exam_id=exam_id).order_by(FavoriteQuestion.topic_number, FavoriteQuestion.question_index).all()
+@routes_bp.route('/favorites/<exam_id>', methods=['GET'])
+@require_auth
+def get_favorite_questions(user, exam_id):
+    favorites = FavoriteQuestion.query.filter_by(
+        user_id=user.id,
+        exam_id=exam_id
+    ).order_by(FavoriteQuestion.topic_number, FavoriteQuestion.question_index).all()
+    
     return jsonify({
         'favorites': [
             {
@@ -242,17 +312,17 @@ def get_favorite_questions(exam_id):
         ]
     })
 
-@app.route('/api/save-answer', methods=['POST'])
-def save_answer():
+@routes_bp.route('/save-answer', methods=['POST'])
+@require_auth
+def save_answer(user):
     data = request.json
-    user_id = 1
     exam_id = data['exam_id']
     topic_number = data['topic_number']
     question_index = data['question_index']
     selected_options = data['selected_options']
 
     user_answer = UserAnswer.query.filter_by(
-        user_id=user_id,
+        user_id=user.id,
         exam_id=exam_id,
         topic_number=topic_number,
         question_index=question_index
@@ -262,7 +332,7 @@ def save_answer():
         user_answer.selected_options = selected_options
     else:
         user_answer = UserAnswer(
-            user_id=user_id,
+            user_id=user.id,
             exam_id=exam_id,
             topic_number=topic_number,
             question_index=question_index,
@@ -273,10 +343,14 @@ def save_answer():
     db.session.commit()
     return jsonify({'message': 'Answer saved successfully'}), 200
 
-@app.route('/api/get-answers/<exam_id>', methods=['GET'])
-def get_answers(exam_id):
-    user_id = 1
-    user_answers = UserAnswer.query.filter_by(user_id=user_id, exam_id=exam_id).all()
+@routes_bp.route('/get-answers/<exam_id>', methods=['GET'])
+@require_auth
+def get_answers(user, exam_id):
+    user_answers = UserAnswer.query.filter_by(
+        user_id=user.id,
+        exam_id=exam_id
+    ).all()
+    
     return jsonify({
         'answers': [
             {
@@ -287,8 +361,9 @@ def get_answers(exam_id):
         ]
     })
 
-@app.route('/api/submit-answers', methods=['POST'])
-def submit_answers():
+@routes_bp.route('/submit-answers', methods=['POST'])
+@require_auth
+def submit_answers(user):
     data = request.json
     exam_id = unquote(data['exam_id'])
     user_answers = data['user_answers']
@@ -336,7 +411,7 @@ def submit_answers():
 
     try:
         exam_attempt = ExamAttempt(
-            user_id=1,
+            user_id=user.id,
             exam_id=exam_id,
             score=score,
             total_questions=total_questions,
@@ -360,23 +435,24 @@ def submit_answers():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/incorrect-questions/<exam_id>', methods=['GET'])
-def get_incorrect_questions(exam_id):
-    user_id = 1
-    latest_attempt = ExamAttempt.query.filter_by(user_id=user_id, exam_id=exam_id).order_by(ExamAttempt.attempt_date.desc()).first()
+@routes_bp.route('/incorrect-questions/<exam_id>', methods=['GET'])
+@require_auth
+def get_incorrect_questions(user, exam_id):
+    latest_attempt = ExamAttempt.query.filter_by(
+        user_id=user.id,
+        exam_id=exam_id
+    ).order_by(ExamAttempt.attempt_date.desc()).first()
     
     if not latest_attempt:
         return jsonify({'incorrect_questions': []})
     
     return jsonify({'incorrect_questions': latest_attempt.incorrect_questions})
 
-@app.route('/api/exam-progress', methods=['GET'])
-def get_exam_progress():
+@routes_bp.route('/exam-progress', methods=['GET'])
+@require_auth
+def get_exam_progress(user):
     try:
-        user_id = 1
-        
-        # Debug log
-        print("Starting exam progress fetch for user_id:", user_id)
+        print("Starting exam progress fetch for user_id:", user.id)
         
         try:
             base_query = db.session.query(Exam).distinct().join(
@@ -392,7 +468,7 @@ def get_exam_progress():
                 user_answer_query = base_query.join(
                     UserAnswer, 
                     UserAnswer.exam_id == Exam.id
-                ).filter(UserAnswer.user_id == user_id)
+                ).filter(UserAnswer.user_id == user.id)
                 exam_queries.append(user_answer_query)
             except Exception as e:
                 print(f"Error in UserAnswer join: {str(e)}")
@@ -402,7 +478,7 @@ def get_exam_progress():
                 exam_attempt_query = base_query.join(
                     ExamAttempt, 
                     ExamAttempt.exam_id == Exam.id
-                ).filter(ExamAttempt.user_id == user_id)
+                ).filter(ExamAttempt.user_id == user.id)
                 exam_queries.append(exam_attempt_query)
             except Exception as e:
                 print(f"Error in ExamAttempt join: {str(e)}")
@@ -412,7 +488,7 @@ def get_exam_progress():
                 exam_visit_query = base_query.join(
                     ExamVisit, 
                     ExamVisit.exam_id == Exam.id
-                ).filter(ExamVisit.user_id == user_id)
+                ).filter(ExamVisit.user_id == user.id)
                 exam_queries.append(exam_visit_query)
             except Exception as e:
                 print(f"Error in ExamVisit join: {str(e)}")
@@ -422,7 +498,7 @@ def get_exam_progress():
                 user_pref_query = base_query.join(
                     UserPreference, 
                     UserPreference.last_visited_exam == Exam.id
-                ).filter(UserPreference.user_id == user_id)
+                ).filter(UserPreference.user_id == user.id)
                 exam_queries.append(user_pref_query)
             except Exception as e:
                 print(f"Error in UserPreference join: {str(e)}")
@@ -452,7 +528,7 @@ def get_exam_progress():
                 # Get answered questions count
                 try:
                     answered_questions = UserAnswer.query.filter_by(
-                        user_id=user_id,
+                        user_id=user.id,
                         exam_id=exam.id
                     ).count()
                 except Exception as e:
@@ -464,7 +540,7 @@ def get_exam_progress():
                 # Get exam attempts
                 try:
                     attempts = ExamAttempt.query.filter_by(
-                        user_id=user_id,
+                        user_id=user.id,
                         exam_id=exam.id
                     ).order_by(ExamAttempt.attempt_date.desc()).all()
                 except Exception as e:
@@ -520,7 +596,7 @@ def get_exam_progress():
                             last_update = f"{months} {'month' if months == 1 else 'months'} ago"
                     else:
                         last_answer = UserAnswer.query.filter_by(
-                            user_id=user_id,
+                            user_id=user.id,
                             exam_id=exam.id
                         ).order_by(UserAnswer.id.desc()).first()
                         
@@ -529,7 +605,7 @@ def get_exam_progress():
                             timestamp = datetime.utcnow().timestamp() * 1000
                         else:
                             visit = ExamVisit.query.filter_by(
-                                user_id=user_id,
+                                user_id=user.id,
                                 exam_id=exam.id
                             ).first()
                             
@@ -610,26 +686,26 @@ def get_exam_progress():
         print(f"Unhandled error in get_exam_progress: {str(e)}")
         return jsonify({
             'error': 'Internal server error',
-            'message': str(e) if app.debug else 'An unexpected error occurred'
+            'message': str(e) if current_app.debug else 'An unexpected error occurred'
         }), 500
 
-@app.route('/api/track-exam-visit', methods=['POST'])
-def track_exam_visit():
+@routes_bp.route('/track-exam-visit', methods=['POST'])
+@require_auth
+def track_exam_visit(user):
     data = request.json
-    user_id = 1
     exam_id = data.get('exam_id')
     
     if not exam_id:
         return jsonify({'error': 'Exam ID is required'}), 400
         
     visit = ExamVisit.query.filter_by(
-        user_id=user_id,
+        user_id=user.id,
         exam_id=exam_id
     ).first()
     
     if not visit:
         visit = ExamVisit(
-            user_id=user_id,
+            user_id=user.id,
             exam_id=exam_id
         )
         db.session.add(visit)
@@ -639,11 +715,10 @@ def track_exam_visit():
     db.session.commit()
     return jsonify({'message': 'Visit tracked successfully'}), 200
 
-@app.route('/api/delete-exams', methods=['POST'])
-def delete_exams():
-    """Delete selected exams and their associated data"""
+@routes_bp.route('/delete-exams', methods=['POST'])
+@require_auth
+def delete_exams(user):
     data = request.json
-    user_id = 1
     exam_ids = data.get('exam_ids', [])
     
     if not exam_ids:
@@ -651,27 +726,27 @@ def delete_exams():
     
     try:
         UserPreference.query.filter(
-            UserPreference.user_id == user_id,
+            UserPreference.user_id == user.id,
             UserPreference.last_visited_exam.in_(exam_ids)
         ).update({UserPreference.last_visited_exam: None}, synchronize_session=False)
         
         FavoriteQuestion.query.filter(
-            FavoriteQuestion.user_id == user_id,
+            FavoriteQuestion.user_id == user.id,
             FavoriteQuestion.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
         UserAnswer.query.filter(
-            UserAnswer.user_id == user_id,
+            UserAnswer.user_id == user.id,
             UserAnswer.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
         ExamAttempt.query.filter(
-            ExamAttempt.user_id == user_id,
+            ExamAttempt.user_id == user.id,
             ExamAttempt.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
         ExamVisit.query.filter(
-            ExamVisit.user_id == user_id,
+            ExamVisit.user_id == user.id,
             ExamVisit.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
@@ -687,11 +762,10 @@ def delete_exams():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/delete-provider-exams', methods=['POST'])
-def delete_provider_exams():
-    """Delete all exams for specified providers"""
+@routes_bp.route('/delete-provider-exams', methods=['POST'])
+@require_auth
+def delete_provider_exams(user):
     data = request.json
-    user_id = 1
     provider_names = data.get('provider_names', [])
     
     if not provider_names:
@@ -707,27 +781,27 @@ def delete_provider_exams():
             return jsonify({'message': 'No exams found for the specified providers'}), 200
         
         UserPreference.query.filter(
-            UserPreference.user_id == user_id,
+            UserPreference.user_id == user.id,
             UserPreference.last_visited_exam.in_(exam_ids)
         ).update({UserPreference.last_visited_exam: None}, synchronize_session=False)
         
         FavoriteQuestion.query.filter(
-            FavoriteQuestion.user_id == user_id,
+            FavoriteQuestion.user_id == user.id,
             FavoriteQuestion.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
         UserAnswer.query.filter(
-            UserAnswer.user_id == user_id,
+            UserAnswer.user_id == user.id,
             UserAnswer.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
         ExamAttempt.query.filter(
-            ExamAttempt.user_id == user_id,
+            ExamAttempt.user_id == user.id,
             ExamAttempt.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
         ExamVisit.query.filter(
-            ExamVisit.user_id == user_id,
+            ExamVisit.user_id == user.id,
             ExamVisit.exam_id.in_(exam_ids)
         ).delete(synchronize_session=False)
         
@@ -743,20 +817,19 @@ def delete_provider_exams():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/delete-all-progress', methods=['POST'])
-def delete_all_progress():
+@routes_bp.route('/delete-all-progress', methods=['POST'])
+@require_auth
+def delete_all_progress(user):
     """Delete all exam progress for the user"""
-    user_id = 1
-    
     try:
-        UserPreference.query.filter_by(user_id=user_id).update(
+        UserPreference.query.filter_by(user_id=user.id).update(
             {UserPreference.last_visited_exam: None}, 
             synchronize_session=False
         )
-        FavoriteQuestion.query.filter_by(user_id=user_id).delete(synchronize_session=False)
-        UserAnswer.query.filter_by(user_id=user_id).delete(synchronize_session=False)
-        ExamAttempt.query.filter_by(user_id=user_id).delete(synchronize_session=False)
-        ExamVisit.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+        FavoriteQuestion.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+        UserAnswer.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+        ExamAttempt.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+        ExamVisit.query.filter_by(user_id=user.id).delete(synchronize_session=False)
         
         Exam.query.update({Exam.progress: 0}, synchronize_session=False)
         
@@ -767,11 +840,11 @@ def delete_all_progress():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/sidebar-state', methods=['GET'])
-def get_sidebar_state():
+@routes_bp.route('/sidebar-state', methods=['GET'])
+@require_auth
+def get_sidebar_state(user):
     try:
-        user_id = 1
-        preference = UserPreference.query.filter_by(user_id=user_id).first()
+        preference = UserPreference.query.filter_by(user_id=user.id).first()
         
         if preference:
             return jsonify({'is_collapsed': preference.is_sidebar_collapsed if hasattr(preference, 'is_sidebar_collapsed') else False})
@@ -780,18 +853,18 @@ def get_sidebar_state():
         print(f"Error getting sidebar state: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
-@app.route('/api/sidebar-state', methods=['POST'])
-def update_sidebar_state():
-    user_id = 1
+@routes_bp.route('/sidebar-state', methods=['POST'])
+@require_auth
+def update_sidebar_state(user):
     data = request.json
     is_collapsed = data.get('is_collapsed', False)
     
-    preference = UserPreference.query.filter_by(user_id=user_id).first()
+    preference = UserPreference.query.filter_by(user_id=user.id).first()
     if preference:
         preference.is_sidebar_collapsed = is_collapsed
     else:
         preference = UserPreference(
-            user_id=user_id,
+            user_id=user.id,
             is_sidebar_collapsed=is_collapsed
         )
         db.session.add(preference)
@@ -799,7 +872,8 @@ def update_sidebar_state():
     db.session.commit()
     return jsonify({'message': 'Sidebar state updated successfully'})
 
-@app.route('/api/provider-statistics', methods=['GET'])
+# Public routes that don't need authentication
+@routes_bp.route('/provider-statistics', methods=['GET'])
 def get_provider_statistics():
     """Get provider statistics and categories."""
     try:
@@ -846,30 +920,20 @@ def get_provider_statistics():
     except Exception as e:
         print(f"Error in provider_statistics: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
-    
-@app.route('/api/health')
+
+@routes_bp.route('/health')
 def health_check():
     try:
-        # try to query the database
         db.session.execute(text('SELECT 1'))
         return jsonify({'status': 'healthy', 'database': 'connected'}), 200
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'database': str(e)}), 500
-    
-# Add this at the end of your routes.py file
-@app.errorhandler(Exception)
-def handle_error(error):
-    print(f"Unhandled error: {str(error)}")
-    response = {
-        "error": "Internal server error",
-        "message": str(error) if app.debug else "An unexpected error occurred"
-    }
-    return jsonify(response), 500
 
-@app.route('/api/debug/sidebar-state', methods=['GET'])
+# Debug routes - these can remain without authentication for debugging
+@routes_bp.route('/debug/sidebar-state', methods=['GET'])
 def debug_sidebar_state():
     try:
-        user_id = 1
+        user_id = 1  # Debug route can keep user_id = 1
         preference = UserPreference.query.filter_by(user_id=user_id).first()
         return jsonify({
             'preference_exists': preference is not None,
@@ -878,11 +942,11 @@ def debug_sidebar_state():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
-@app.route('/api/debug/exam-progress', methods=['GET'])
+
+@routes_bp.route('/debug/exam-progress', methods=['GET'])
 def debug_exam_progress():
     try:
-        user_id = 1
+        user_id = 1  # Debug route can keep user_id = 1
         
         # Check database connectivity
         db.session.execute(text('SELECT 1'))

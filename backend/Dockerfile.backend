@@ -5,7 +5,9 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
-    PIP_DEFAULT_TIMEOUT=100
+    PIP_DEFAULT_TIMEOUT=100 \
+    FLASK_ENV=production \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
@@ -15,17 +17,49 @@ RUN apt-get update \
         gcc \
         postgresql-client \
         libpq-dev \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir gunicorn==21.2.0
 
-# Copy application code
-COPY . .
+# Create necessary directories and ensure they're clean
+RUN mkdir -p /app/logs /app/providers
 
-# Make scripts executable
-RUN chmod +x /app/scripts/init-backend.sh
+# Copy providers data first and verify
+COPY providers /app/providers
+RUN echo "Verifying providers directory contents:" && \
+    find /app/providers -type f -name "*.json" | wc -l && \
+    echo "Provider directories:" && \
+    ls -la /app/providers
+
+# Copy remaining application code
+COPY . /app
+
+# Clean up any system files
+RUN find /app -name "*.pyc" -delete && \
+    find /app -name "__pycache__" -delete
+
+# Set proper permissions
+RUN chown -R nobody:nogroup /app && \
+    chmod -R 755 /app/scripts && \
+    chmod +x /app/scripts/init-backend.sh
+
+# Verify final app structure
+RUN echo "Final /app contents:" && ls -la /app && \
+    echo "Final /app/providers contents:" && ls -la /app/providers
+
+# Switch to non-root user
+USER nobody
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:5000/api/health || exit 1
+
+# Expose port
+EXPOSE 5000
 
 # Set the default command
-CMD ["/app/scripts/init-backend.sh"]
+ENTRYPOINT ["/app/scripts/init-backend.sh"]

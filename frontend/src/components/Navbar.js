@@ -1,3 +1,4 @@
+// Navbar.js
 import React from "react";
 import {
   Box,
@@ -8,35 +9,36 @@ import {
   useColorMode,
   useColorModeValue,
   useBreakpointValue,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
 } from "@chakra-ui/react";
 import { RiMoonFill, RiSunFill } from "react-icons/ri";
+import { LuLogOut } from "react-icons/lu";
+import { useAuth } from '../contexts/AuthContext';
 
 const Navbar = ({ activeItem, children }) => {
   const { colorMode, toggleColorMode } = useColorMode();
+  const { user, logout } = useAuth();
   const isMobile = useBreakpointValue({ base: true, md: false });
 
-  const bgColor = useColorModeValue(
-    "brand.background.light",
-    "brand.background.dark"
-  );
-  const borderColor = useColorModeValue(
-    "brand.border.light",
-    "brand.border.dark"
-  );
+  const bgColor = useColorModeValue("brand.background.light", "brand.background.dark");
+  const borderColor = useColorModeValue("brand.border.light", "brand.border.dark");
   const textColor = useColorModeValue("brand.text.light", "brand.text.dark");
-  const highlightBg = useColorModeValue(
-    "brand.secondary.light",
-    "brand.secondary.dark"
-  );
-  const toggleBg = useColorModeValue(
-    "brand.surface.light",
-    "brand.surface.dark"
-  );
-  const toggleIconBg = useColorModeValue(
-    "brand.primary.light",
-    "brand.primary.dark"
-  );
+  const highlightBg = useColorModeValue("brand.secondary.light", "brand.secondary.dark");
+  const toggleBg = useColorModeValue("brand.surface.light", "brand.surface.dark");
+  const toggleIconBg = useColorModeValue("brand.primary.light", "brand.primary.dark");
   const helloTextColor = useColorModeValue("gray.600", "gray.400");
+  const menuBg = useColorModeValue("brand.background.light", "brand.background.dark");
+  const menuItemBg = useColorModeValue("brand.background.light", "brand.background.dark");
+  const menuItemHoverBg = useColorModeValue("brand.surface.light", "brand.surface.dark");
+
+  const handleLogout = () => {
+    logout();
+  };
+
+  const displayName = user ? (user.name?.split(' ')[0] || user.username) : 'Guest';
 
   const MobileThemeToggle = () => (
     <Box
@@ -86,9 +88,7 @@ const Navbar = ({ activeItem, children }) => {
           height="16px"
           bg={toggleIconBg}
           borderRadius="full"
-          transform={
-            colorMode === "light" ? "translateX(3px)" : "translateX(27px)"
-          }
+          transform={colorMode === "light" ? "translateX(3px)" : "translateX(27px)"}
           transition="all 0.2s"
           border="1px solid"
           borderColor={borderColor}
@@ -174,13 +174,7 @@ const Navbar = ({ activeItem, children }) => {
                 color={textColor}
                 transition="color 0.2s"
               >
-                <Box
-                  as="span"
-                  bg={highlightBg}
-                  px="1"
-                  py="0"
-                  borderRadius="8px"
-                >
+                <Box as="span" bg={highlightBg} px="1" py="0" borderRadius="8px">
                   {activeItem}
                 </Box>
               </Text>
@@ -194,38 +188,66 @@ const Navbar = ({ activeItem, children }) => {
 
       <HStack spacing={4} flexShrink={0} ml={4}>
         {isMobile ? <MobileThemeToggle /> : <DesktopThemeToggle />}
-        <Flex align="center">
-          {!isMobile && (
-            <>
-              <Text
-                fontFamily="body"
-                fontWeight={700}
-                fontSize="20px"
-                lineHeight="30px"
-                color={helloTextColor}
-                mr={1}
-                transition="color 0.2s"
-              >
-                Hello,
-              </Text>
-              <Text
-                fontFamily="body"
-                fontWeight={700}
-                fontSize="20px"
-                lineHeight="30px"
-                color={textColor}
-                mr={2}
-                transition="color 0.2s"
-              >
-                rsduran!
-              </Text>
-            </>
-          )}
-          <Avatar
-            src="https://bit.ly/dan-abramov"
-            size={isMobile ? "sm" : "md"}
-          />
-        </Flex>
+        <Menu placement="bottom-end" autoSelect={false}>
+          <MenuButton>
+            <Flex align="center">
+              {!isMobile && (
+                <>
+                  <Text
+                    fontFamily="body"
+                    fontWeight={700}
+                    fontSize={{ base: "16px", md: "20px" }}
+                    lineHeight={{ base: "24px", md: "30px" }}
+                    color={helloTextColor}
+                    mr={1}
+                    transition="color 0.2s"
+                  >
+                    Hello,
+                  </Text>
+                  <Text
+                    fontFamily="body"
+                    fontWeight={700}
+                    fontSize={{ base: "16px", md: "20px" }}
+                    lineHeight={{ base: "24px", md: "30px" }}
+                    color={textColor}
+                    mr={2}
+                    transition="color 0.2s"
+                  >
+                    {displayName}!
+                  </Text>
+                </>
+              )}
+              <Avatar
+                src={user?.avatar_url || "https://bit.ly/dan-abramov"}
+                size={isMobile ? "sm" : "md"}
+              />
+            </Flex>
+          </MenuButton>
+          <MenuList
+            bg={menuBg}
+            borderColor={borderColor}
+            boxShadow="0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -1px rgba(0, 0, 0, 0.06)"
+            borderRadius="12px"
+            minW={0}
+            w={isMobile ? "120px" : "140px"}
+            p={1}
+            mt={1}
+          >
+            <MenuItem
+              icon={<LuLogOut size={isMobile ? 16 : 20} />}
+              onClick={handleLogout}
+              bg={menuItemBg}
+              _hover={{ bg: menuItemHoverBg }}
+              color={textColor}
+              borderRadius="8px"
+              fontSize={{ base: "14px", md: "16px" }}
+              h={{ base: "36px", md: "40px" }}
+              px={2}
+            >
+              Logout
+            </MenuItem>
+          </MenuList>
+        </Menu>
       </HStack>
     </Flex>
   );

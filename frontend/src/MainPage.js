@@ -19,6 +19,8 @@ import SelectExamBox from "./components/SelectExamBox";
 import ResultsModal from "./components/ResultsModal";
 import CustomConfirmationDialog from "./components/CustomConfirmationDialog";
 
+import { fetchWithAuth } from './utils/api';
+
 const ProviderExamsCard = lazy(() => import("./components/ProviderExamsCard"));
 const ProvidersPage = lazy(() => import("./components/ProvidersPage"));
 const QuestionPanel = lazy(() => import("./components/QuestionPanel"));
@@ -92,6 +94,20 @@ const MainPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const updateLastVisitedExam = useCallback(async (examId) => {
+    try {
+      await fetchWithAuth(`${API_URL}/api/user-preference`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ last_visited_exam: examId }),
+      });
+    } catch (error) {
+      console.error("Error updating last visited exam:", error);
+    }
+  }, [API_URL]);  
+
   const getActiveItem = (path) => {
     if (path === "/") return "Dashboard";
     if (path.startsWith("/providers")) return "Providers";
@@ -104,7 +120,7 @@ const MainPage = () => {
   useEffect(() => {
     const fetchLastVisitedExam = async () => {
       try {
-        const response = await fetch(
+        const response = await fetchWithAuth(
           `${API_URL}/api/user-preference`
         );
         const data = await response.json();
@@ -117,7 +133,7 @@ const MainPage = () => {
     };
 
     fetchLastVisitedExam();
-  }, []);
+  }, [API_URL]);
 
   useEffect(() => {
     if (location.pathname.startsWith("/actual-exam") && examId) {
@@ -125,12 +141,12 @@ const MainPage = () => {
       setCurrentExam(examId);
       updateLastVisitedExam(examId);
     }
-  }, [location, examId]);
+  }, [location, examId, updateLastVisitedExam]);
 
   const fetchUserAnswers = useCallback(async () => {
     try {
       const encodedExamId = encodeURIComponent(currentExam);
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${API_URL}/api/get-answers/${encodedExamId}`
       );
       const data = await response.json();
@@ -143,12 +159,12 @@ const MainPage = () => {
     } catch (error) {
       console.error("Error fetching user answers:", error);
     }
-  }, [currentExam]);
+  }, [currentExam, API_URL]);
 
   const fetchIncorrectQuestions = useCallback(async () => {
     try {
       const encodedExamId = encodeURIComponent(currentExam);
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${API_URL}/api/incorrect-questions/${encodedExamId}`
       );
       const data = await response.json();
@@ -156,14 +172,14 @@ const MainPage = () => {
     } catch (error) {
       console.error("Error fetching incorrect questions:", error);
     }
-  }, [currentExam]);
+  }, [currentExam, API_URL]);
 
   useEffect(() => {
     const fetchExamData = async () => {
       try {
         setExamData(null);
         const encodedExamId = encodeURIComponent(currentExam);
-        const response = await fetch(
+        const response = await fetchWithAuth(
           `${API_URL}/api/exams/${encodedExamId}`
         );
 
@@ -192,6 +208,7 @@ const MainPage = () => {
     currentTopic,
     fetchUserAnswers,
     fetchIncorrectQuestions,
+    API_URL
   ]);
 
   useEffect(() => {
@@ -212,7 +229,7 @@ const MainPage = () => {
     if (currentExam) {
       const fetchFavorites = async () => {
         try {
-          const response = await fetch(
+          const response = await fetchWithAuth(
             `${API_URL}/api/favorites/${currentExam}`
           );
           const data = await response.json();
@@ -224,12 +241,12 @@ const MainPage = () => {
 
       fetchFavorites();
     }
-  }, [currentExam]);
+  }, [currentExam, API_URL]);
 
   useEffect(() => {
     const fetchSidebarState = async () => {
       try {
-        const response = await fetch(
+        const response = await fetchWithAuth(
           `${API_URL}/api/sidebar-state`
         );
         const data = await response.json();
@@ -243,7 +260,7 @@ const MainPage = () => {
     };
 
     fetchSidebarState();
-  }, []);
+  }, [API_URL]);
 
   useEffect(() => {
     setSelectedOptions(
@@ -251,26 +268,12 @@ const MainPage = () => {
     );
   }, [userAnswers, currentTopic, currentQuestionIndex]);
 
-  const updateLastVisitedExam = async (examId) => {
-    try {
-      await fetch(`${API_URL}/api/user-preference`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ last_visited_exam: examId }),
-      });
-    } catch (error) {
-      console.error("Error updating last visited exam:", error);
-    }
-  };
-
   const toggleStar = async (event) => {
     event.stopPropagation();
     if (!currentExam || !examData) return;
 
     try {
-      const response = await fetch(`${API_URL}/api/favorite`, {
+      const response = await fetchWithAuth(`${API_URL}/api/favorite`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -316,7 +319,7 @@ const MainPage = () => {
     setIsSidebarCollapsed(newState);
 
     try {
-      await fetch(`${API_URL}/api/sidebar-state`, {
+      await fetchWithAuth(`${API_URL}/api/sidebar-state`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -332,7 +335,7 @@ const MainPage = () => {
     try {
       const encodedExamId = encodeURIComponent(examId);
 
-      await fetch(`${API_URL}/api/track-exam-visit`, {
+      await fetchWithAuth(`${API_URL}/api/track-exam-visit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -387,7 +390,7 @@ const MainPage = () => {
 
   const submitExam = async () => {
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${API_URL}/api/submit-answers`,
         {
           method: "POST",
@@ -442,7 +445,7 @@ const MainPage = () => {
     const currentQuestionId = `T${currentTopic} Q${currentQuestionIndex + 1}`;
 
     try {
-      await fetch(`${API_URL}/api/save-answer`, {
+      await fetchWithAuth(`${API_URL}/api/save-answer`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

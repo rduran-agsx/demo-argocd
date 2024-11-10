@@ -1,21 +1,32 @@
+# Build stage
 FROM node:18-alpine as build
 
 WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
 
+# Install dependencies
 RUN npm install
 
+# Copy source code
 COPY . .
 
-ARG REACT_APP_API_URL
-ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+# Create env file during build with production values
+RUN echo "REACT_APP_API_URL=https://hiraya.amihan.net" > .env.production
+RUN echo "NODE_ENV=production" >> .env.production
+RUN echo "PUBLIC_URL=https://hiraya.amihan.net" >> .env.production
 
+# Build the app
 RUN npm run build
 
+# Production stage
 FROM nginx:alpine
 
+# Copy build files
 COPY --from=build /app/build /usr/share/nginx/html
+
+# Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80

@@ -26,6 +26,8 @@ import Pagination from "./Pagination";
 import { debounce } from "lodash";
 import ProviderCard from "./ProviderCard";
 
+import { fetchWithAuth } from '../utils/api';
+
 const LoadingSpinner = () => {
   const { colorMode } = useColorMode();
   
@@ -62,7 +64,7 @@ const ProviderExamsCard = ({ onExamSelect, view, onViewChange }) => {
   const fetchProviders = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/providers`);
+      const response = await fetchWithAuth(`${API_URL}/api/providers`);
       const data = await response.json();
       setProviders(data.providers);
     } catch (error) {

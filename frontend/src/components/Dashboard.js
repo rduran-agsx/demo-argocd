@@ -30,6 +30,8 @@ import DeleteConfirmationModal from "./DeleteConfirmationModal";
 import { createCustomToast } from "./CustomToast";
 import Pagination from "./Pagination";
 
+import { fetchWithAuth } from '../utils/api';
+
 const CustomCheckbox = ({ isChecked, isIndeterminate, onChange }) => {
   const { colorMode } = useColorMode();
 
@@ -1390,7 +1392,7 @@ const Dashboard = () => {
       if (!isMounted.current) return;
       setIsLoading(true);
 
-      const response = await fetch(`${API_URL}/api/exam-progress`, {
+      const response = await fetchWithAuth(`${API_URL}/api/exam-progress`, {
         signal: abortControllerRef.current.signal,
       });
 
@@ -1421,7 +1423,7 @@ const Dashboard = () => {
         setIsLoading(false);
       }
     }
-  }, []);
+  }, [API_URL]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -1449,14 +1451,14 @@ const Dashboard = () => {
     openDeleteModal();
   }, [openDeleteModal]);
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = useCallback(async () => {
     try {
       if (deleteType === "all") {
-        await fetch(`${API_URL}/api/delete-all-progress`, {
+        await fetchWithAuth(`${API_URL}/api/delete-all-progress`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
-
+  
         if (isMounted.current) {
           setExamProgress([]);
           toastRef.current({
@@ -1471,7 +1473,7 @@ const Dashboard = () => {
             const selectedProviderExams = provider.exams
               .filter((exam) => selectedForDeletion.includes(exam.id))
               .map((exam) => exam.id);
-
+  
             if (selectedProviderExams.length === provider.exams.length) {
               acc.providers.push(provider.name);
             } else if (selectedProviderExams.length > 0) {
@@ -1481,25 +1483,25 @@ const Dashboard = () => {
           },
           { providers: [], exams: [] }
         );
-
+  
         if (providerGroups.providers.length > 0) {
-          await fetch(`${API_URL}/api/delete-provider-exams`, {
+          await fetchWithAuth(`${API_URL}/api/delete-provider-exams`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ provider_names: providerGroups.providers }),
           });
         }
-
+  
         if (providerGroups.exams.length > 0) {
-          await fetch(`${API_URL}/api/delete-exams`, {
+          await fetchWithAuth(`${API_URL}/api/delete-exams`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ exam_ids: providerGroups.exams }),
           });
         }
-
+  
         await fetchExamProgress();
-
+  
         if (isMounted.current) {
           toastRef.current({
             title: "Selected items deleted",
@@ -1526,7 +1528,14 @@ const Dashboard = () => {
         setSelectedForDeletion([]);
       }
     }
-  };
+  }, [
+    API_URL,
+    deleteType,
+    examProgress,
+    fetchExamProgress,
+    selectedForDeletion,
+    closeDeleteModal
+  ]);
 
   return (
     <Box

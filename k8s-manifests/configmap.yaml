@@ -1,5 +1,6 @@
 # configmap.yaml
-# Frontend Config
+
+# Frontend ConfigMap
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,68 +12,49 @@ data:
       listen 80;
       server_name _;
 
-      # Increased timeouts
-      proxy_connect_timeout 300s;
-      proxy_send_timeout 300s;
-      proxy_read_timeout 300s;
-      
-      # Increased buffer sizes
-      proxy_buffer_size 128k;
-      proxy_buffers 4 256k;
-      proxy_busy_buffers_size 256k;
+      # Include MIME types
+      include /etc/nginx/mime.types;
+      root /usr/share/nginx/html;
+      index index.html;
 
+      # Serve static files with proper MIME types
+      location /static/ {
+        try_files $uri $uri/ =404;
+        expires 1y;
+        access_log off;
+        add_header Cache-Control "public";
+      }
+
+      # Handle React routes
       location / {
-          root /usr/share/nginx/html;
-          try_files $uri $uri/ /index.html;
-          add_header Cache-Control "no-store, no-cache, must-revalidate";
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
       }
 
-      location /api/ {
-          proxy_pass http://10.74.0.21:30050;
-          proxy_http_version 1.1;
-          proxy_set_header Upgrade $http_upgrade;
-          proxy_set_header Connection 'upgrade';
-          proxy_set_header Host $host;
-          proxy_set_header X-Real-IP $remote_addr;
-          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-          proxy_cache_bypass $http_upgrade;
-          
-          # Increased timeouts for API calls
-          proxy_connect_timeout 300;
-          proxy_send_timeout 300;
-          proxy_read_timeout 300;
-          
-          # Add CORS headers
-          add_header 'Access-Control-Allow-Origin' '*' always;
-          add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
-          add_header 'Access-Control-Allow-Headers' 'DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization' always;
-          
-          # Handle preflight
-          if ($request_method = 'OPTIONS') {
-              add_header 'Access-Control-Allow-Origin' '*';
-              add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE';
-              add_header 'Access-Control-Allow-Headers' 'DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization';
-              add_header 'Access-Control-Max-Age' 1728000;
-              add_header 'Content-Type' 'text/plain charset=UTF-8';
-              add_header 'Content-Length' 0;
-              return 204;
-          }
-
-          # Error handling
-          proxy_intercept_errors on;
-          error_page 404 502 503 504 = @error_json;
-      }
-
-      location @error_json {
-          return 502 '{"error":"Bad Gateway","message":"Backend service temporarily unavailable"}';
-          add_header Content-Type application/json;
-      }
-
-      # Health check endpoint
+      # Health endpoint
       location /health {
-          access_log off;
-          return 200 "healthy\n";
+        access_log off;
+        return 200 "healthy\n";
       }
+
+      # API proxy
+      location /api/ {
+        proxy_pass http://hiraya-backend:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      }
+
+      # Enable gzip
+      gzip on;
+      gzip_vary on;
+      gzip_proxied any;
+      gzip_comp_level 6;
+      gzip_types text/plain text/css text/xml application/javascript application/json;
     }
 ---
 # Backend Config
@@ -86,13 +68,15 @@ metadata:
 data:
   FLASK_APP: app.py
   FLASK_ENV: production
-  CORS_ORIGINS: "http://10.74.0.21:30080,http://10.74.0.22:30080,http://10.74.0.23:30080,http://10.74.0.24:30080"
+  CORS_ORIGINS: "https://hiraya.amihan.net"
+  FRONTEND_URL: "https://hiraya.amihan.net"
+  API_URL: "https://hiraya.amihan.net/api"
   GUNICORN_WORKERS: "4"
-  GUNICORN_THREADS: "2"
+  GUNICORN_THREADS: "4"
   GUNICORN_TIMEOUT: "300"
   GUNICORN_KEEPALIVE: "5"
 ---
-# Postgres Config (New)
+# Postgres Config
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -118,7 +102,7 @@ data:
     max_parallel_workers = 8
     max_parallel_maintenance_workers = 4
 ---
-# Postgres Init Scripts (New)
+# Postgres Init Scripts
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -126,8 +110,23 @@ metadata:
   namespace: cet-rduran
 data:
   init.sql: |
+    -- Initial PostgreSQL System Configuration
     ALTER SYSTEM SET max_connections = '200';
     ALTER SYSTEM SET shared_buffers = '512MB';
     ALTER SYSTEM SET work_mem = '32MB';
     ALTER SYSTEM SET maintenance_work_mem = '128MB';
     ALTER SYSTEM SET effective_cache_size = '1GB';
+
+    -- Create application user and database
+    CREATE USER "hiraya-admin" WITH PASSWORD 'password' CREATEDB;
+    ALTER USER "hiraya-admin" WITH SUPERUSER;
+    CREATE DATABASE "hiraya-db" WITH OWNER = "hiraya-admin";
+    GRANT ALL PRIVILEGES ON DATABASE "hiraya-db" TO "hiraya-admin";
+
+    -- Connect to the application database
+    \c hiraya-db
+
+    -- Set up database extensions and permissions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "hiraya-admin";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "hiraya-admin";

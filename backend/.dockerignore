@@ -1,0 +1,16 @@
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+.env*
+*.log
+venv/
+.git
+.gitignore
+.pytest_cache
+*.egg-info
+dist/
+build/
+*.swp
+*.swo
+.vscode/
+.idea/

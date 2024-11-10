@@ -24,6 +24,8 @@ import Pagination from "./Pagination";
 import CategoryCard from "./CategoryCard";
 import { debounce } from "lodash";
 
+import { fetchWithAuth } from '../utils/api';
+
 const LoadingSpinner = () => {
   const { colorMode } = useColorMode();
   
@@ -60,7 +62,7 @@ const ProvidersPage = () => {
   useEffect(() => {
     const fetchProviders = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/provider-statistics`);
+        const response = await fetchWithAuth(`${API_URL}/api/provider-statistics`);
         if (!response.ok) {
           throw new Error('Failed to fetch provider statistics');
         }
