@@ -23,6 +23,7 @@ import {
 import "@fontsource-variable/karla/wght.css";
 import "@fontsource/space-grotesk/700.css";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from '../contexts/AuthContext';
 
 const SidebarItem = chakra(Flex, {
   baseStyle: {
@@ -81,6 +82,7 @@ const SidebarText = chakra(Text, {
 });
 
 const PremiumBox = React.memo(({ isCollapsed }) => {
+  const navigate = useNavigate();
   const borderColor = useColorModeValue(
     "brand.border.light",
     "brand.border.dark"
@@ -96,6 +98,8 @@ const PremiumBox = React.memo(({ isCollapsed }) => {
     "linear(135deg, #B38600, #804000)"
   );
 
+  if (isCollapsed) return null;
+
   return (
     <Box
       bgGradient={premiumGradient}
@@ -107,9 +111,7 @@ const PremiumBox = React.memo(({ isCollapsed }) => {
       margin={4}
       position="relative"
       overflow="hidden"
-      opacity={isCollapsed ? 0 : 1}
       transition="all 0.3s ease"
-      pointerEvents={isCollapsed ? "none" : "auto"}
     >
       <Box
         position="absolute"
@@ -144,6 +146,7 @@ const PremiumBox = React.memo(({ isCollapsed }) => {
           _active={{
             transform: "translateY(0)",
           }}
+          onClick={() => navigate('/premium')}
         >
           Go Premium! ✨
         </Button>
@@ -159,6 +162,7 @@ const Sidebar = ({
   lastVisitedExam,
 }) => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const { colorMode } = useColorMode();
   const [isMobile] = useMediaQuery("(max-width: 48em)");
 
@@ -186,6 +190,14 @@ const Sidebar = ({
     "brand.primary.light",
     "brand.primary.dark"
   );
+  const scrollbarThumbColor = useColorModeValue(
+    "rgba(0,0,0,0.1)",
+    "rgba(255,255,255,0.1)"
+  );
+  const scrollbarThumbHoverColor = useColorModeValue(
+    "rgba(0,0,0,0.2)",
+    "rgba(255,255,255,0.2)"
+  );
 
   const menuItems = [
     { name: "Dashboard", icon: RxDashboard, path: "/" },
@@ -201,6 +213,10 @@ const Sidebar = ({
     } else {
       navigate(path);
     }
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   if (isMobile) {
@@ -242,130 +258,157 @@ const Sidebar = ({
       backgroundColor={bgColor}
       width={isCollapsed ? "80px" : "300px"}
       height="100vh"
-      paddingTop="20px"
-      paddingBottom="0"
-      paddingX="0"
       position="relative"
       transition="all 0.3s ease"
       borderRadius="0"
+      display="flex"
+      flexDirection="column"
     >
-      <Flex
-        alignItems="center"
-        justifyContent="center"
-        marginBottom="60px"
-        opacity={isCollapsed ? 0 : 1}
-        transition="opacity 0.3s ease"
-        pointerEvents={isCollapsed ? "none" : "auto"}
-      >
-        <Box display="flex" alignItems="center">
-        <img 
-  src="/hiraya-logo.png" 
-  alt="Hiraya Logo" 
-  width="32" 
-  height="32"
-  style={{
-    filter: colorMode === 'dark' ? 'invert(1)' : 'none'
-  }}
-/>
-          <Text
-            marginLeft="4px"
-            fontFamily="heading"
-            fontSize="32px"
-            fontWeight="bold"
-            color={textColor}
-            position="relative"
-            transition="color 0.2s"
-          >
-            hiraya
-            <sup
-              style={{
-                fontSize: "8px",
-                position: "absolute",
-                top: "15px",
-                right: "-12px",
-                color: textColor,
-              }}
-            >
-              TM
-            </sup>
-          </Text>
-        </Box>
-      </Flex>
-
-      <VStack spacing={2} align="stretch">
-        {menuItems.map((item) => (
-          <DesktopSidebarItem
-            key={item.name}
-            onClick={() => handleItemClick(item.path, item.name)}
-            position="relative"
-            zIndex={1}
-            color={itemColor}
-            _hover={{
-              backgroundColor: hoverBg,
-            }}
-          >
-            <Box
-              position="absolute"
-              top="-3px"
-              left={0}
-              right={0}
-              bottom="-3px"
-              backgroundColor={
-                activeItem === item.name ? activeItemBg : "transparent"
-              }
-              borderRadius="0 20px 20px 0"
-              borderTop={
-                activeItem === item.name ? `1px solid ${borderColor}` : "none"
-              }
-              borderRight={
-                activeItem === item.name ? `1px solid ${borderColor}` : "none"
-              }
-              borderBottom={
-                activeItem === item.name ? `1px solid ${borderColor}` : "none"
-              }
-              boxShadow={activeItem === item.name ? boxShadow : "none"}
-              zIndex={-1}
-              transition="all 0.2s"
-            />
-            <DesktopSidebarIcon as={item.icon} fontSize="24px" size="24px" />
-            <SidebarText
-              fontWeight={activeItem === item.name ? 700 : 500}
-              opacity={isCollapsed ? 0 : 1}
-              pointerEvents={isCollapsed ? "none" : "auto"}
-            >
-              {item.name}
-            </SidebarText>
-          </DesktopSidebarItem>
-        ))}
-      </VStack>
-
-      <Box position="absolute" bottom="80px" left="0" right="0">
-        <PremiumBox isCollapsed={isCollapsed} />
-      </Box>
-
-      <DesktopSidebarItem
-        position="absolute"
-        bottom="20px"
-        left="0"
-        right="0"
-        zIndex={1}
-        color={logoutColor}
-        _hover={{
-          "& > *": {
-            color: "red.500",
-          },
-          transform: "translateY(-2px)",
-        }}
-      >
-        <DesktopSidebarIcon as={LuLogOut} fontSize="24px" size="24px" />
-        <SidebarText
+      {/* Logo Section */}
+      <Box flexShrink={0} paddingTop="20px" paddingX="0">
+        <Flex
+          alignItems="center"
+          justifyContent="center"
+          marginBottom="60px"
           opacity={isCollapsed ? 0 : 1}
+          transition="opacity 0.3s ease"
           pointerEvents={isCollapsed ? "none" : "auto"}
         >
-          Logout
-        </SidebarText>
-      </DesktopSidebarItem>
+          <Box display="flex" alignItems="center">
+            <img
+              src="/hiraya-logo.png"
+              alt="Hiraya Logo"
+              width="32"
+              height="32"
+              style={{
+                filter: colorMode === "dark" ? "invert(1)" : "none",
+              }}
+            />
+            <Text
+              marginLeft="4px"
+              fontFamily="heading"
+              fontSize="32px"
+              fontWeight="bold"
+              color={textColor}
+              position="relative"
+              transition="color 0.2s"
+            >
+              hiraya
+              <sup
+                style={{
+                  fontSize: "8px",
+                  position: "absolute",
+                  top: "15px",
+                  right: "-12px",
+                  color: textColor,
+                }}
+              >
+                TM
+              </sup>
+            </Text>
+          </Box>
+        </Flex>
+      </Box>
 
+      {/* Menu Items */}
+      <Box
+        flex="1"
+        overflow={isCollapsed ? "visible" : "auto"}
+        css={
+          !isCollapsed
+            ? {
+                "&::-webkit-scrollbar": {
+                  width: "3px",
+                },
+                "&::-webkit-scrollbar-track": {
+                  width: "3px",
+                  background: "transparent",
+                },
+                "&::-webkit-scrollbar-thumb": {
+                  background: scrollbarThumbColor,
+                  borderRadius: "24px",
+                },
+                "&:hover::-webkit-scrollbar-thumb": {
+                  background: scrollbarThumbHoverColor,
+                },
+                scrollbarWidth: "thin",
+                scrollbarColor: `${scrollbarThumbColor} transparent`,
+              }
+            : {}
+        }
+      >
+        <VStack spacing={2} align="stretch">
+          {menuItems.map((item) => (
+            <DesktopSidebarItem
+              key={item.name}
+              onClick={() => handleItemClick(item.path, item.name)}
+              position="relative"
+              zIndex={1}
+              color={itemColor}
+              _hover={{
+                backgroundColor: hoverBg,
+              }}
+            >
+              <Box
+                position="absolute"
+                top="-3px"
+                left={0}
+                right={0}
+                bottom="-3px"
+                backgroundColor={
+                  activeItem === item.name ? activeItemBg : "transparent"
+                }
+                borderRadius="0 20px 20px 0"
+                borderTop={
+                  activeItem === item.name ? `1px solid ${borderColor}` : "none"
+                }
+                borderRight={
+                  activeItem === item.name ? `1px solid ${borderColor}` : "none"
+                }
+                borderBottom={
+                  activeItem === item.name ? `1px solid ${borderColor}` : "none"
+                }
+                boxShadow={activeItem === item.name ? boxShadow : "none"}
+                zIndex={-1}
+                transition="all 0.2s"
+              />
+              <DesktopSidebarIcon as={item.icon} fontSize="24px" size="24px" />
+              <SidebarText
+                fontWeight={activeItem === item.name ? 700 : 500}
+                opacity={isCollapsed ? 0 : 1}
+                pointerEvents={isCollapsed ? "none" : "auto"}
+              >
+                {item.name}
+              </SidebarText>
+            </DesktopSidebarItem>
+          ))}
+        </VStack>
+      </Box>
+
+      {/* Bottom Section */}
+      <Box flexShrink={0} paddingBottom="20px">
+        <PremiumBox isCollapsed={isCollapsed} />
+        <DesktopSidebarItem
+          color={logoutColor}
+          onClick={handleLogout}
+          _hover={{
+            "& > *": {
+              color: "red.500",
+            },
+            transform: "translateY(-2px)",
+          }}
+        >
+          <DesktopSidebarIcon as={LuLogOut} fontSize="24px" size="24px" />
+          <SidebarText
+            opacity={isCollapsed ? 0 : 1}
+            pointerEvents={isCollapsed ? "none" : "auto"}
+          >
+            Logout
+          </SidebarText>
+        </DesktopSidebarItem>
+      </Box>
+
+      {/* Collapse Button */}
       <Button
         position="absolute"
         top="24px"

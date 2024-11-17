@@ -62,11 +62,9 @@ const MainPage = () => {
   
   const { colorMode } = useColorMode();
 
-  // Theme-aware colors
   const sidebarBgColor =
     colorMode === "light" ? "brand.surface.light" : "brand.surface.dark";
 
-  // States
   const [isStarFilled, setIsStarFilled] = useState(false);
   const [currentTopic, setCurrentTopic] = useState(1);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(null);

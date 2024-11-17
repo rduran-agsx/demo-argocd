@@ -33,7 +33,7 @@ metadata:
   name: hiraya-database
   namespace: cet-rduran
 spec:
-  type: ClusterIP  # Changed from None to ClusterIP
+  type: ClusterIP
   selector:
     app: hiraya-database
   ports:

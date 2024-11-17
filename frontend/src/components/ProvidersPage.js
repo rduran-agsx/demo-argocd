@@ -77,7 +77,7 @@ const ProvidersPage = () => {
     };
 
     fetchProviders();
-  }, []);
+  }, [API_URL]);
 
   const filteredCategories = useMemo(() => {
     let filtered = categories;
@@ -116,7 +116,7 @@ const ProvidersPage = () => {
         borderTop="1px solid"
         borderLeft="1px solid"
         borderRight="1px solid"
-        borderColor={colorMode === "light" ? "black" : "white"}
+        borderColor={colorMode === "light" ? "brand.border.light" : "brand.border.dark"}
         boxShadow="none"
         overflow="hidden"
         bg="transparent"

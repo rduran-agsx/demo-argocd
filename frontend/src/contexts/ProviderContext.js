@@ -1,7 +1,7 @@
 // src/contexts/ProviderContext.js
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { fetchWithAuth } from './utils/api';
+import { fetchWithAuth } from '../utils/api';
 
 const ProviderContext = createContext();
 

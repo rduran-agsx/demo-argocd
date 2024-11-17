@@ -60,7 +60,6 @@ def migrate_providers_to_db():
             'topics_migrated': 0
         }
 
-        # List all provider directories
         provider_dirs = [d for d in os.listdir(root_dir) 
                         if os.path.isdir(os.path.join(root_dir, d))]
         logger.info(f"Found {len(provider_dirs)} provider directories")
@@ -69,7 +68,6 @@ def migrate_providers_to_db():
             provider_path = os.path.join(root_dir, provider_name)
             logger.info(f"Processing provider: {provider_name}")
 
-            # Create or get provider
             provider = Provider.query.filter_by(name=provider_name).first()
             if not provider:
                 provider = Provider(
@@ -83,7 +81,6 @@ def migrate_providers_to_db():
             else:
                 logger.info(f"Using existing provider: {provider_name}")
 
-            # Group exam files by base exam name
             exam_groups = {}
             exam_files = [f for f in os.listdir(provider_path) 
                          if f.endswith('.json')]
@@ -111,14 +108,12 @@ def migrate_providers_to_db():
                     logger.error(f"Error loading exam file {exam_file}: {str(e)}")
                     continue
 
-            # Process each exam group
             for base_key, topic_files in exam_groups.items():
                 exam_title, exam_code, _ = parse_exam_file(base_key)
                 display_title = get_exam_title_from_code(exam_title, exam_code)
                 exam_id = f"{provider.name}-{exam_title}-code-{exam_code}"
 
                 try:
-                    # Create or update exam
                     exam = Exam.query.get(exam_id)
                     if not exam:
                         total_questions = sum(len(topic['data']) for topic in topic_files)
@@ -134,7 +129,6 @@ def migrate_providers_to_db():
                     else:
                         logger.info(f"Updating existing exam: {display_title}")
 
-                    # Create or update topics
                     for topic_info in topic_files:
                         topic = Topic.query.filter_by(
                             exam_id=exam_id,

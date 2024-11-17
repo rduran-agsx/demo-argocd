@@ -1,0 +1,622 @@
+----
+configmap.yaml
+# configmap.yaml
+
+# Frontend ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hiraya-frontend-config
+  namespace: cet-rduran
+data:
+  default.conf: |
+    server {
+      listen 80;
+      server_name _;
+
+      # Include MIME types
+      include /etc/nginx/mime.types;
+      root /usr/share/nginx/html;
+      index index.html;
+
+      # Serve static files with proper MIME types
+      location /static/ {
+        try_files $uri $uri/ =404;
+        expires 1y;
+        access_log off;
+        add_header Cache-Control "public";
+      }
+
+      # Handle React routes
+      location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+      }
+
+      # Health endpoint
+      location /health {
+        access_log off;
+        return 200 "healthy\n";
+      }
+
+      # API proxy
+      location /api/ {
+        proxy_pass http://hiraya-backend:5000/;
+        proxy_http_version 1.1;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      }
+
+      # Enable gzip
+      gzip on;
+      gzip_vary on;
+      gzip_proxied any;
+      gzip_comp_level 6;
+      gzip_types text/plain text/css text/xml application/javascript application/json;
+    }
+---
+# Backend Config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hiraya-backend-config
+  namespace: cet-rduran
+  labels:
+    app: hiraya-backend
+data:
+  FLASK_APP: app.py
+  FLASK_ENV: production
+  CORS_ORIGINS: "https://hiraya.amihan.net"
+  FRONTEND_URL: "https://hiraya.amihan.net"
+  API_URL: "https://hiraya.amihan.net/api"
+  GUNICORN_WORKERS: "4"
+  GUNICORN_THREADS: "4"
+  GUNICORN_TIMEOUT: "300"
+  GUNICORN_KEEPALIVE: "5"
+---
+# Postgres Config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: cet-rduran
+data:
+  postgresql.conf: |
+    max_connections = 200
+    shared_buffers = 512MB
+    work_mem = 32MB
+    maintenance_work_mem = 128MB
+    effective_cache_size = 1GB
+    random_page_cost = 1.1
+    synchronous_commit = off
+    max_wal_size = 1GB
+    min_wal_size = 80MB
+    wal_buffers = 16MB
+    checkpoint_completion_target = 0.9
+    default_statistics_target = 500
+    effective_io_concurrency = 200
+    max_worker_processes = 8
+    max_parallel_workers_per_gather = 4
+    max_parallel_workers = 8
+    max_parallel_maintenance_workers = 4
+---
+# Postgres Init Scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  namespace: cet-rduran
+data:
+  init.sql: |
+    -- Initial PostgreSQL System Configuration
+    ALTER SYSTEM SET max_connections = '200';
+    ALTER SYSTEM SET shared_buffers = '512MB';
+    ALTER SYSTEM SET work_mem = '32MB';
+    ALTER SYSTEM SET maintenance_work_mem = '128MB';
+    ALTER SYSTEM SET effective_cache_size = '1GB';
+
+    -- Create application user and database
+    CREATE USER "hiraya-admin" WITH PASSWORD 'password' CREATEDB;
+    ALTER USER "hiraya-admin" WITH SUPERUSER;
+    CREATE DATABASE "hiraya-db" WITH OWNER = "hiraya-admin";
+    GRANT ALL PRIVILEGES ON DATABASE "hiraya-db" TO "hiraya-admin";
+
+    -- Connect to the application database
+    \c hiraya-db
+
+    -- Set up database extensions and permissions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "hiraya-admin";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "hiraya-admin";
+----
+deployment.yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hiraya-frontend
+  namespace: cet-rduran
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hiraya-frontend
+  template:
+    metadata:
+      labels:
+        app: hiraya-frontend
+    spec:
+      containers:
+      - name: hiraya-frontend
+        image: amihanglobal/hiraya_application:frontend_prod
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-conf
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+        - name: nginx-temp
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      volumes:
+      - name: nginx-conf
+        configMap:
+          name: hiraya-frontend-config
+      - name: nginx-temp
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+      imagePullSecrets:
+      - name: dockerhub-image-pull-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hiraya-backend
+  namespace: cet-rduran
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hiraya-backend
+  template:
+    metadata:
+      labels:
+        app: hiraya-backend
+    spec:
+      initContainers:
+      - name: wait-for-db
+        image: postgres:14-alpine
+        command: ['sh', '-c',
+          'until pg_isready -h hiraya-database -p 5432 -U hiraya-admin -d hiraya-db; do echo waiting for database; sleep 2; done;']
+        env:
+          - name: PGPASSWORD
+            value: "password"
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+      containers:
+      - name: hiraya-backend
+        image: amihanglobal/hiraya_application:backend_prod
+        imagePullPolicy: Always
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+            scheme: HTTP
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        command: ["/app/scripts/init-backend.sh"]
+        env:
+        - name: FLASK_APP
+          valueFrom:
+            configMapKeyRef:
+              key: FLASK_APP
+              name: hiraya-backend-config
+        - name: FLASK_ENV
+          valueFrom:
+            configMapKeyRef:
+              key: FLASK_ENV
+              name: hiraya-backend-config
+        - name: DB_USER
+          value: "hiraya-admin"
+        - name: DB_PASSWORD
+          value: "password"
+        - name: DB_NAME
+          value: "hiraya-db"
+        - name: DB_HOST
+          value: "hiraya-database"
+        - name: DB_PORT
+          value: "5432"
+        - name: DATABASE_URL
+          value: "postgresql://hiraya-admin:password@hiraya-database:5432/hiraya-db"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: CORS_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              key: CORS_ORIGINS
+              name: hiraya-backend-config
+        - name: API_URL
+          valueFrom:
+            configMapKeyRef:
+              key: API_URL
+              name: hiraya-backend-config
+        - name: FRONTEND_URL
+          valueFrom:
+            configMapKeyRef:
+              key: FRONTEND_URL
+              name: hiraya-backend-config
+        - name: GITHUB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: github-oauth-secret
+              key: GITHUB_CLIENT_ID
+        - name: GITHUB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: github-oauth-secret
+              key: GITHUB_CLIENT_SECRET
+        - name: GOOGLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: google-oauth-secret
+              key: GOOGLE_CLIENT_ID
+        - name: GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: google-oauth-secret
+              key: GOOGLE_CLIENT_SECRET
+        - name: DEBUG
+          value: "False"
+        - name: SQLALCHEMY_POOL_SIZE
+          value: "30"
+        - name: SQLALCHEMY_MAX_OVERFLOW
+          value: "10"
+        - name: SQLALCHEMY_POOL_TIMEOUT
+          value: "60"
+        - name: SQLALCHEMY_POOL_RECYCLE
+          value: "1800"
+        - name: GUNICORN_WORKERS
+          value: "4"
+        - name: GUNICORN_THREADS
+          value: "4"
+        - name: GUNICORN_TIMEOUT
+          value: "300"
+        - name: GUNICORN_KEEPALIVE
+          value: "5"
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hiraya-backend-secret
+              key: JWT_SECRET_KEY
+        resources:
+          limits:
+            memory: "3Gi"
+            cpu: "1500m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+        ports:
+        - containerPort: 5000
+          protocol: TCP
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+      imagePullSecrets:
+      - name: dockerhub-image-pull-secret
+----
+ingress.yaml
+# ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hiraya-ingress
+  namespace: cet-rduran
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/ingress.class: nginx
+    kubernetes.io/tls-acme: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: Deny";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "Referrer-Policy: same-origin";
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 50m
+    nginx.ingress.kubernetes.io/proxy-buffer-size: 128k
+spec:
+  rules:
+    - host: hiraya.amihan.net
+      http:
+        paths:
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: hiraya-backend
+                port:
+                  number: 5000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hiraya-frontend
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - hiraya.amihan.net
+      secretName: hiraya-tls
+
+----
+pvc.yaml
+# pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hiraya-database-pvc
+  namespace: cet-rduran
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: cephfs
+----
+secret.yaml
+# secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hiraya-database-secret
+  namespace: cet-rduran
+type: Opaque
+data:
+  DB_USER: aGlyYXlhLWFkbWlu
+  DB_PASSWORD: cGFzc3dvcmQ=
+  DB_NAME: aGlyYXlhLWRi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dockerhub-image-pull-secret
+  namespace: cet-rduran
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: eyJhdXRocyI6eyJodHRwczovL2luZGV4LmRvY2tlci5pby92MS8iOnsidXNlcm5hbWUiOiJhbWloYW5nbG9iYWwiLCJwYXNzd29yZCI6IkFtMWhAbjA4MDgifX19
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hiraya-backend-secret
+  namespace: cet-rduran
+type: Opaque
+data:
+  JWT_SECRET_KEY: TWItNnJMN3BuVHZMWHE5QmhIZGxveC1sQjV5NGxDeFYxb0RKVHJJUUxWVFR0RkdmX2hUc29HM0FWV3VUTXk5VWtYYmYweW5UblUwTG9nRnlrT19VNmc=
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-oauth-secret
+  namespace: cet-rduran
+type: Opaque
+data:
+  GITHUB_CLIENT_ID: T3YyM2xpNk1KOHNRMGpRa2JDY1Y=
+  GITHUB_CLIENT_SECRET: ZjRiMWMwMTNjNWZlY2UzMzdmMGVjNzFhMDMxMjg1YTlmNmZkMjMxNg==
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: google-oauth-secret
+  namespace: cet-rduran
+type: Opaque
+data:
+  GOOGLE_CLIENT_ID: MTk2MDQxOTM0NDY0LXFkOXIyOWJyb3Rxb2dvZHAyYXQwZDdscTgxbWFpMmo3LmFwcHMuZ29vZ2xldXNlcmNvbnRlbnQuY29t
+  GOOGLE_CLIENT_SECRET: R09DU1BYLUExSWRRbEJnV21BNkVDSnliZ0FuQ3BleHZ2TXk=
+----
+service.yaml
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hiraya-frontend
+  namespace: cet-rduran
+spec:
+  type: NodePort
+  selector:
+    app: hiraya-frontend
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hiraya-backend
+  namespace: cet-rduran
+spec:
+  type: NodePort
+  selector:
+    app: hiraya-backend
+  ports:
+  - port: 5000
+    targetPort: 5000
+    nodePort: 30050
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hiraya-database
+  namespace: cet-rduran
+spec:
+  type: ClusterIP
+  selector:
+    app: hiraya-database
+  ports:
+  - port: 5432
+    targetPort: 5432
+----
+statefulset.yaml
+# statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hiraya-database
+  namespace: cet-rduran
+spec:
+  serviceName: hiraya-database
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hiraya-database
+  template:
+    metadata:
+      labels:
+        app: hiraya-database
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+      - name: hiraya-database
+        image: postgres:14-alpine
+        readinessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - hiraya-admin
+              - -d
+              - hiraya-db
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - hiraya-admin
+              - -d
+              - hiraya-db
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+        env:
+        - name: POSTGRES_USER
+          value: "hiraya-admin"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: DB_PASSWORD
+              name: hiraya-database-secret
+        - name: POSTGRES_DB
+          value: "hiraya-db"
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        # PostgreSQL Performance Tuning
+        - name: POSTGRES_MAX_CONNECTIONS
+          value: "200"
+        - name: POSTGRES_SHARED_BUFFERS
+          value: "512MB"
+        - name: POSTGRES_WORK_MEM
+          value: "32MB"
+        - name: POSTGRES_MAINTENANCE_WORK_MEM
+          value: "128MB"
+        - name: POSTGRES_EFFECTIVE_CACHE_SIZE
+          value: "1GB"
+        - name: POSTGRES_RANDOM_PAGE_COST
+          value: "1.1"
+        - name: POSTGRES_SYNCHRONOUS_COMMIT
+          value: "off"
+        - name: POSTGRES_MAX_WAL_SIZE
+          value: "1GB"
+        - name: POSTGRES_MIN_WAL_SIZE
+          value: "80MB"
+        - name: POSTGRES_WAL_BUFFERS
+          value: "16MB"
+        - name: POSTGRES_CHECKPOINT_COMPLETION_TARGET
+          value: "0.9"
+        - name: POSTGRES_DEFAULT_STATISTICS_TARGET
+          value: "500"
+        resources:
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+        - name: postgres-initdb
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+      - name: postgres-initdb
+        configMap:
+          name: postgres-initdb
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: hiraya-database-pvc
+      imagePullSecrets:
+      - name: dockerhub-image-pull-secret
+--END--

@@ -30,7 +30,7 @@ import DeleteConfirmationModal from "./DeleteConfirmationModal";
 import { createCustomToast } from "./CustomToast";
 import Pagination from "./Pagination";
 
-import { fetchWithAuth } from '../utils/api';
+import { fetchWithAuth } from "../utils/api";
 
 const CustomCheckbox = ({ isChecked, isIndeterminate, onChange }) => {
   const { colorMode } = useColorMode();
@@ -231,6 +231,7 @@ const CustomButton = ({
   color,
   _hover,
   boxShadow,
+  isDisabled,  // Add this
   ...props
 }) => (
   <Button
@@ -245,16 +246,17 @@ const CustomButton = ({
     fontWeight={700}
     textTransform="uppercase"
     transition="0.3s"
-    boxShadow={boxShadow || "0 4px 0 0 black"}
+    boxShadow={boxShadow || (isDisabled ? "none" : "0 4px 0 0 black")}  // Update this
     _hover={{
-      transform: "translateY(2px)",
-      boxShadow: "0 2px 0 0 black",
+      transform: isDisabled ? "none" : "translateY(2px)",  // Update this
+      boxShadow: isDisabled ? "none" : "0 2px 0 0 black", // Update this
       ..._hover,
     }}
     _active={{
-      transform: "translateY(4px)",
+      transform: isDisabled ? "none" : "translateY(4px)",  // Update this
       boxShadow: "none",
     }}
+    isDisabled={isDisabled}
     leftIcon={leftIcon}
     {...props}
   >
@@ -290,7 +292,11 @@ const WelcomeComponent = ({ users, countries }) => {
   return (
     <Box
       width="100%"
-      bgGradient="linear(to-r, #00bfff, #0080ff)"
+      bgGradient={
+        colorMode === "light"
+          ? "linear(to-r, #00bfff, #0080ff)"
+          : "linear(to-r, #006699, #004d80)"
+      }
       borderRadius={{ base: "10px", md: "20px" }}
       border="1px solid"
       borderColor={
@@ -390,7 +396,7 @@ const MobileAppsComing = ({ onClose }) => {
       bgGradient={
         colorMode === "light"
           ? "linear(to-br, #FFB347, #ffcc33)"
-          : "linear(to-br, #B37F32, #B38F24)"
+          : "linear(to-br, #8B6914, #806600)"
       }
       borderRadius={{ base: "10px", md: "20px" }}
       border="1px solid"
@@ -498,7 +504,11 @@ const SupportDevelopers = ({ onClose }) => {
   return (
     <Box
       width="100%"
-      bgGradient="linear(to-r, #8BC34A, #4CAF50)"
+      bgGradient={
+        colorMode === "light"
+          ? "linear(to-r, #8BC34A, #4CAF50)"
+          : "linear(to-r, #3D662A, #2D5A2E)"
+      }
       borderRadius={{ base: "10px", md: "20px" }}
       border="1px solid"
       borderColor={
@@ -839,74 +849,78 @@ const CustomDashboardTable = ({ data, onDeleteSelected, onDeleteAll }) => {
       }
       overflow="hidden"
     >
-{/* Mobile View */}
-<Box display={{ base: "block", md: "none" }}>
-  <Flex
-    padding={4}
-    borderBottom="1px solid"
-    borderColor={
-      colorMode === "light" ? "brand.border.light" : "brand.border.dark"
-    }
-  >
-    <Flex width="100%" alignItems="center" gap={4}>
-      <IconBox
-        icon={LuSearch}
-        size="40px"
-        iconScale={0.4}
-        borderThickness={3}
-        backgroundColor={
-          colorMode === "light"
-            ? "brand.background.light"
-            : "brand.background.dark"
-        }
-        onClick={onOpen}
-      />
-      <Flex flex={1} justifyContent="flex-end">
-        <VStack spacing={2} align="flex-end">
-          <CustomButton
-            onClick={() => onDeleteSelected(selectedRows)}
-            isDisabled={selectedRows.length === 0}
-            backgroundColor="transparent"
-            color={colorMode === "light" ? "#FF3333" : "#FF6666"}
-            border="1px solid"
-            borderColor={colorMode === "light" ? "#FF3333" : "#FF6666"}
-            _hover={
-              selectedRows.length > 0
-                ? {
-                    backgroundColor:
-                      colorMode === "light" ? "#FFE5E5" : "#4D0000",
-                    transform: "translateY(2px)",
-                    boxShadow: "0 2px 0 0 black",
+      {/* Mobile View */}
+      <Box display={{ base: "block", md: "none" }}>
+        <Flex padding={4} borderBottom="1px solid" borderColor={colorMode === "light" ? "brand.border.light" : "brand.border.dark"}>
+          <Flex width="100%" alignItems="center" gap={4}>
+            <IconBox
+              icon={LuSearch}
+              size="40px"
+              iconScale={0.4}
+              borderThickness={3}
+              backgroundColor={colorMode === "light" ? "brand.background.light" : "brand.background.dark"}
+              onClick={onOpen}
+            />
+            <Flex flex={1} justifyContent="flex-end">
+              <VStack spacing={2} align="flex-end">
+                <CustomButton
+                  onClick={() => onDeleteSelected(selectedRows)}
+                  isDisabled={selectedRows.length === 0}
+                  backgroundColor="transparent"
+                  color={colorMode === "light" ? "#FF3333" : "#FF6666"}
+                  border="1px solid"
+                  borderColor={colorMode === "light" ? "#FF3333" : "#FF6666"}
+                  _hover={
+                    selectedRows.length > 0
+                      ? {
+                          backgroundColor: colorMode === "light" ? "#FFE5E5" : "#4D0000",
+                          transform: "translateY(2px)",
+                          boxShadow: colorMode === "light"
+                            ? "0 2px 0 0 black !important"
+                            : "0 2px 0 0 rgba(255, 102, 102, 0.3) !important",
+                        }
+                      : undefined
                   }
-                : undefined
-            }
-            boxShadow={selectedRows.length > 0 ? "0 4px 0 0 black" : "none"}
-            fontSize="sm"
-            height="40px"
-            paddingX={3}
-          >
-            Delete Selected
-          </CustomButton>
-          <CustomButton
-            onClick={onDeleteAll}
-            backgroundColor={colorMode === "light" ? "#FF3333" : "#FF6666"}
-            color="white"
-            _hover={{
-              backgroundColor: colorMode === "light" ? "#FF0000" : "#CC0000",
-              transform: "translateY(2px)",
-              boxShadow: "0 2px 0 0 black",
-            }}
-            boxShadow="0 4px 0 0 black"
-            fontSize="sm"
-            height="40px"
-            paddingX={3}
-          >
-            Delete All
-          </CustomButton>
-        </VStack>
-      </Flex>
-    </Flex>
-  </Flex>
+                  sx={{
+                    boxShadow: selectedRows.length > 0
+                      ? colorMode === "light"
+                        ? "0 4px 0 0 black !important"
+                        : "0 4px 0 0 rgba(255, 102, 102, 0.3) !important"
+                      : "none",
+                  }}
+                  fontSize="sm"
+                  height="40px"
+                  paddingX={3}
+                >
+                  Delete Selected
+                </CustomButton>
+
+                <CustomButton
+                  onClick={onDeleteAll}
+                  backgroundColor={colorMode === "light" ? "#FF3333" : "#FF6666"}
+                  color="white"
+                  _hover={{
+                    backgroundColor: colorMode === "light" ? "#FF0000" : "#CC0000",
+                    transform: "translateY(2px)",
+                    boxShadow: colorMode === "light"
+                      ? "0 2px 0 0 black !important"
+                      : "0 2px 0 0 rgba(255, 102, 102, 0.3) !important",
+                  }}
+                  sx={{
+                    boxShadow: colorMode === "light"
+                      ? "0 4px 0 0 black !important"
+                      : "0 4px 0 0 rgba(255, 102, 102, 0.3) !important",
+                  }}
+                  fontSize="sm"
+                  height="40px"
+                  paddingX={3}
+                >
+                  Delete All
+                </CustomButton>
+              </VStack>
+            </Flex>
+          </Flex>
+        </Flex>
 
         {data.map((provider, index) => (
           <Box
@@ -1050,14 +1064,28 @@ const CustomDashboardTable = ({ data, onDeleteSelected, onDeleteAll }) => {
                       backgroundColor:
                         colorMode === "light" ? "#FFE5E5" : "#4D0000",
                       transform: "translateY(2px)",
-                      boxShadow: "0 2px 0 0 black",
+                      boxShadow:
+                        colorMode === "light"
+                          ? "0 2px 0 0 black !important"
+                          : "0 2px 0 0 rgba(255, 102, 102, 0.3) !important",
                     }
                   : undefined
               }
-              boxShadow={selectedRows.length > 0 ? "0 4px 0 0 black" : "none"}
+              sx={{
+                boxShadow:
+                  selectedRows.length > 0
+                    ? colorMode === "light"
+                      ? "0 4px 0 0 black !important"
+                      : "0 4px 0 0 rgba(255, 102, 102, 0.3) !important"
+                    : "none",
+              }}
+              fontSize="sm"
+              height="40px"
+              paddingX={3}
             >
               Delete Selected
             </CustomButton>
+
             <CustomButton
               onClick={onDeleteAll}
               backgroundColor={colorMode === "light" ? "#FF3333" : "#FF6666"}
@@ -1065,9 +1093,20 @@ const CustomDashboardTable = ({ data, onDeleteSelected, onDeleteAll }) => {
               _hover={{
                 backgroundColor: colorMode === "light" ? "#FF0000" : "#CC0000",
                 transform: "translateY(2px)",
-                boxShadow: "0 2px 0 0 black",
+                boxShadow:
+                  colorMode === "light"
+                    ? "0 2px 0 0 black !important"
+                    : "0 2px 0 0 rgba(255, 102, 102, 0.3) !important",
               }}
-              boxShadow="0 4px 0 0 black"
+              sx={{
+                boxShadow:
+                  colorMode === "light"
+                    ? "0 4px 0 0 black !important"
+                    : "0 4px 0 0 rgba(255, 102, 102, 0.3) !important",
+              }}
+              fontSize="sm"
+              height="40px"
+              paddingX={3}
             >
               Delete All
             </CustomButton>
@@ -1364,7 +1403,10 @@ const Dashboard = () => {
   const totalPages = Math.ceil((examProgress?.length || 0) / providersPerPage);
   const indexOfLastProvider = currentPage * providersPerPage;
   const indexOfFirstProvider = indexOfLastProvider - providersPerPage;
-  const currentProviders = examProgress.slice(indexOfFirstProvider, indexOfLastProvider);
+  const currentProviders = examProgress.slice(
+    indexOfFirstProvider,
+    indexOfLastProvider
+  );
 
   const abortControllerRef = useRef(null);
   const isMounted = useRef(true);
@@ -1458,7 +1500,7 @@ const Dashboard = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
-  
+
         if (isMounted.current) {
           setExamProgress([]);
           toastRef.current({
@@ -1473,7 +1515,7 @@ const Dashboard = () => {
             const selectedProviderExams = provider.exams
               .filter((exam) => selectedForDeletion.includes(exam.id))
               .map((exam) => exam.id);
-  
+
             if (selectedProviderExams.length === provider.exams.length) {
               acc.providers.push(provider.name);
             } else if (selectedProviderExams.length > 0) {
@@ -1483,7 +1525,7 @@ const Dashboard = () => {
           },
           { providers: [], exams: [] }
         );
-  
+
         if (providerGroups.providers.length > 0) {
           await fetchWithAuth(`${API_URL}/api/delete-provider-exams`, {
             method: "POST",
@@ -1491,7 +1533,7 @@ const Dashboard = () => {
             body: JSON.stringify({ provider_names: providerGroups.providers }),
           });
         }
-  
+
         if (providerGroups.exams.length > 0) {
           await fetchWithAuth(`${API_URL}/api/delete-exams`, {
             method: "POST",
@@ -1499,9 +1541,9 @@ const Dashboard = () => {
             body: JSON.stringify({ exam_ids: providerGroups.exams }),
           });
         }
-  
+
         await fetchExamProgress();
-  
+
         if (isMounted.current) {
           toastRef.current({
             title: "Selected items deleted",
@@ -1534,7 +1576,7 @@ const Dashboard = () => {
     examProgress,
     fetchExamProgress,
     selectedForDeletion,
-    closeDeleteModal
+    closeDeleteModal,
   ]);
 
   return (

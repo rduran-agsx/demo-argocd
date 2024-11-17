@@ -9,7 +9,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from sqlalchemy import text
 import os
 
-# Initialize extensions
 db = SQLAlchemy()
 oauth = OAuth()
 
@@ -17,10 +16,8 @@ def create_app():
     flask_app = Flask(__name__)
     flask_app.config.from_object(Config)
     
-    # Set secret key for sessions
     flask_app.secret_key = flask_app.config['JWT_SECRET_KEY']
     
-    # Apply ProxyFix middleware
     flask_app.wsgi_app = ProxyFix(
         flask_app.wsgi_app,
         x_for=1,
@@ -29,7 +26,6 @@ def create_app():
         x_prefix=1
     )
     
-    # Initialize CORS with proper origins handling
     origins = flask_app.config.get('CORS_ORIGINS', '').split(',') if isinstance(flask_app.config.get('CORS_ORIGINS'), str) else flask_app.config.get('CORS_ORIGINS', [])
     CORS(flask_app, resources={
         r"/api/*": {
@@ -41,32 +37,25 @@ def create_app():
         }
     })
     
-    # Initialize extensions
     db.init_app(flask_app)
     oauth.init_app(flask_app)
     
     with flask_app.app_context():
-        # Import models
         from models import Provider, Exam, Topic, UserPreference, FavoriteQuestion, UserAnswer, ExamAttempt, ExamVisit
         from auth import User, init_oauth, auth_bp
         
-        # Initialize OAuth
         init_oauth(flask_app)
         
-        # Create database tables
         try:
             db.create_all()
         except Exception as e:
             flask_app.logger.error(f"Error creating database tables: {str(e)}")
         
-        # Register blueprints
         flask_app.register_blueprint(auth_bp)
         
-        # Import and register routes blueprint
         from routes import routes_bp
         flask_app.register_blueprint(routes_bp)
         
-        # Add health check route
         @flask_app.route('/health')
         def health_check():
             try:
@@ -86,9 +75,8 @@ def create_app():
     
     return flask_app
 
-# Create the application instance
 app = create_app()
-application = app  # Add this line for Gunicorn
+application = app
 
 if __name__ == '__main__':
     debug = os.getenv('FLASK_ENV') == 'development'

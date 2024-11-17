@@ -10,7 +10,9 @@ sys.path.append(str(backend_dir))
 
 from app import app, db
 from models import Provider, Exam, Topic, UserPreference, FavoriteQuestion, UserAnswer, ExamAttempt, ExamVisit
+from auth import User
 import logging
+from sqlalchemy import text
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,16 +20,27 @@ logger = logging.getLogger(__name__)
 def init_db():
     """Initialize the database by creating all tables."""
     try:
-        with app.app_context():
-            db.drop_all()
-            logger.info("Dropped all tables.")
+        db.session.execute(text('DROP SCHEMA public CASCADE;'))
+        db.session.execute(text('CREATE SCHEMA public;'))
+        db.session.execute(text('GRANT ALL ON SCHEMA public TO "hiraya-admin";'))
+        db.session.execute(text('GRANT ALL ON SCHEMA public TO public;'))
+        db.session.commit()
+        
+        logger.info("Dropped all tables.")
 
-            db.create_all()
-            logger.info("Created all tables successfully.")
+        db.create_all()
+        logger.info("Created all tables successfully.")
+
+        inspector = db.inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('users')]
+        logger.info(f"Users table columns: {columns}")
 
     except Exception as e:
         logger.error(f"Error initializing database: {str(e)}")
+        if db.session.is_active:
+            db.session.rollback()
         raise
 
 if __name__ == "__main__":
-    init_db()
+    with app.app_context():
+        init_db()

@@ -1,14 +1,12 @@
 // src/contexts/AuthContext.js
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const API_URL = useMemo(() => {
-    // Get URL from environment variable
     const url = process.env.REACT_APP_API_URL || 'https://hiraya.amihan.net';
-    // Remove any trailing slashes
     return url.replace(/\/+$/, '');
   }, []);
 
@@ -16,7 +14,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchUser = async (token) => {
+  const fetchUser = useCallback(async (token) => {
     try {
       const response = await fetch(`${API_URL}/api/auth/me`, {
         headers: {
@@ -45,9 +43,8 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL]);
 
-  // Check for existing token on mount
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -55,9 +52,8 @@ export const AuthProvider = ({ children }) => {
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [fetchUser]);
 
-  // Check URL for token or error parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
@@ -65,15 +61,13 @@ export const AuthProvider = ({ children }) => {
     
     if (token) {
       fetchUser(token);
-      // Clean up URL immediately
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (error) {
       setError(params.get('message') || 'Authentication failed');
       setLoading(false);
-      // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, []);
+  }, [fetchUser]);
 
   const logout = () => {
     localStorage.removeItem('token');
@@ -85,12 +79,12 @@ export const AuthProvider = ({ children }) => {
     setError(null);
   };
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (token) {
       await fetchUser(token);
     }
-  };
+  }, [fetchUser]);
 
   const value = useMemo(() => ({
     user,
@@ -101,7 +95,7 @@ export const AuthProvider = ({ children }) => {
     refreshUser,
     isAuthenticated: !!user,
     apiUrl: API_URL
-  }), [user, loading, error, API_URL]);
+  }), [user, loading, error, API_URL, refreshUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

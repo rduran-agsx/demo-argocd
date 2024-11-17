@@ -12,32 +12,28 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import { ProviderProvider } from "./ProviderContext";
+import { ProviderProvider } from "./contexts/ProviderContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import MainPage from "./MainPage";
 import Auth from "./pages/Auth";
+import PremiumPage from "./pages/PremiumPage";
 import theme from "./theme";
 
-// Loading spinner component
 const LoadingSpinner = () => (
   <Center height="100vh">
     <Spinner size="xl" />
   </Center>
 );
 
-// Protected Route wrapper component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
-  // Show loading state while checking authentication
   if (loading) {
     return <LoadingSpinner />;
   }
 
-  // Redirect to auth if not authenticated
   if (!isAuthenticated) {
-    // Store the attempted URL
     sessionStorage.setItem("auth_redirect", location.pathname);
 
     return <Navigate to="/auth" replace={true} state={{ from: location }} />;
@@ -46,7 +42,6 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Public Route wrapper to prevent authenticated users from accessing auth page
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
 
@@ -79,6 +74,16 @@ const App = () => {
                     <PublicRoute>
                       <Auth />
                     </PublicRoute>
+                  }
+                />
+
+                {/* Premium route */}
+                <Route
+                  path="/premium"
+                  element={
+                    <ProtectedRoute>
+                      <PremiumPage />
+                    </ProtectedRoute>
                   }
                 />
 

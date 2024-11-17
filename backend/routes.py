@@ -12,7 +12,6 @@ from functools import wraps
 import jwt
 from auth import User
 
-# Create blueprint
 routes_bp = Blueprint('routes', __name__, url_prefix='/api')
 
 def handle_route_error(func):
@@ -53,7 +52,6 @@ def require_auth(f):
 
     return decorated
 
-# Register error handlers using the blueprint
 @routes_bp.errorhandler(404)
 def not_found_error(error):
     return jsonify({"error": "Not found", "message": str(error)}), 404
@@ -84,10 +82,8 @@ def get_provider_description(provider_name):
                 return provider['description']
     return f"Official certification exams from {provider_name}"
 
-# Public routes that don't require authentication
 @routes_bp.route('/providers', methods=['GET'])
 def get_providers():
-    # This route remains unchanged as it's public
     page = request.args.get('page', type=int)
     per_page = request.args.get('per_page', type=int)
     
@@ -160,7 +156,6 @@ def get_providers():
             'current_page': page
         })
 
-# Protected routes that require authentication
 @routes_bp.route('/exams/<exam_id>', methods=['GET'])
 @require_auth
 def get_exam(user, exam_id):
@@ -460,10 +455,8 @@ def get_exam_progress(user):
                 Exam.provider_id == Provider.id
             )
             
-            # Create individual queries with error handling
             exam_queries = []
             
-            # UserAnswer join
             try:
                 user_answer_query = base_query.join(
                     UserAnswer, 
@@ -473,7 +466,6 @@ def get_exam_progress(user):
             except Exception as e:
                 print(f"Error in UserAnswer join: {str(e)}")
             
-            # ExamAttempt join
             try:
                 exam_attempt_query = base_query.join(
                     ExamAttempt, 
@@ -483,7 +475,6 @@ def get_exam_progress(user):
             except Exception as e:
                 print(f"Error in ExamAttempt join: {str(e)}")
             
-            # ExamVisit join
             try:
                 exam_visit_query = base_query.join(
                     ExamVisit, 
@@ -493,7 +484,6 @@ def get_exam_progress(user):
             except Exception as e:
                 print(f"Error in ExamVisit join: {str(e)}")
             
-            # UserPreference join
             try:
                 user_pref_query = base_query.join(
                     UserPreference, 
@@ -507,7 +497,6 @@ def get_exam_progress(user):
                 print("No valid queries constructed")
                 return jsonify({'providers': []})
 
-            # Combine queries
             final_query = exam_queries[0]
             for query in exam_queries[1:]:
                 final_query = final_query.union(query)
@@ -525,7 +514,6 @@ def get_exam_progress(user):
             try:
                 total_questions = exam.total_questions
                 
-                # Get answered questions count
                 try:
                     answered_questions = UserAnswer.query.filter_by(
                         user_id=user.id,
@@ -537,7 +525,6 @@ def get_exam_progress(user):
 
                 progress = round((answered_questions / total_questions * 100) if total_questions > 0 else 0, 1)
                 
-                # Get exam attempts
                 try:
                     attempts = ExamAttempt.query.filter_by(
                         user_id=user.id,
@@ -565,7 +552,6 @@ def get_exam_progress(user):
                     except Exception as e:
                         print(f"Error processing attempt data for exam {exam.id}: {str(e)}")
                 
-                # Get last update information
                 try:
                     last_update = None
                     timestamp = None
@@ -670,7 +656,6 @@ def get_exam_progress(user):
                 print(f"Error processing exam {exam.id}: {str(e)}")
                 continue
 
-        # Sort exams by timestamp
         for provider in provider_data.values():
             try:
                 provider['exams'].sort(
@@ -872,7 +857,6 @@ def update_sidebar_state(user):
     db.session.commit()
     return jsonify({'message': 'Sidebar state updated successfully'})
 
-# Public routes that don't need authentication
 @routes_bp.route('/provider-statistics', methods=['GET'])
 def get_provider_statistics():
     """Get provider statistics and categories."""
@@ -929,11 +913,10 @@ def health_check():
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'database': str(e)}), 500
 
-# Debug routes - these can remain without authentication for debugging
 @routes_bp.route('/debug/sidebar-state', methods=['GET'])
 def debug_sidebar_state():
     try:
-        user_id = 1  # Debug route can keep user_id = 1
+        user_id = 1
         preference = UserPreference.query.filter_by(user_id=user_id).first()
         return jsonify({
             'preference_exists': preference is not None,
@@ -946,12 +929,10 @@ def debug_sidebar_state():
 @routes_bp.route('/debug/exam-progress', methods=['GET'])
 def debug_exam_progress():
     try:
-        user_id = 1  # Debug route can keep user_id = 1
+        user_id = 1
         
-        # Check database connectivity
         db.session.execute(text('SELECT 1'))
         
-        # Get counts
         exam_count = Exam.query.count()
         provider_count = Provider.query.count()
         user_answer_count = UserAnswer.query.filter_by(user_id=user_id).count()

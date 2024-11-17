@@ -1,11 +1,26 @@
 import React from 'react';
-import { Box, Text, useColorMode } from '@chakra-ui/react';
+import { Box, Text, useColorMode, useBreakpointValue } from '@chakra-ui/react';
 import { FixedSizeList as List } from 'react-window';
 
 const QuestionListDropdown = React.memo(({ questions, currentQuestion, onSelect }) => {
   const { colorMode } = useColorMode();
   const itemSize = 32;
   const listHeight = Math.min(questions.length * itemSize, 300);
+  const isMobile = useBreakpointValue({ base: true, md: false });
+
+  // Adjust positioning for mobile vs desktop
+  const dropdownPosition = isMobile ? {
+    position: "absolute",
+    top: "calc(100% + 8px)",
+    left: "0", // Align to the left edge of the button
+    width: "120px", // Back to original width
+  } : {
+    position: "absolute",
+    top: "calc(100% + 8px)",
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "120px",
+  };
 
   const Row = ({ index, style }) => {
     const question = questions[index];
@@ -45,11 +60,7 @@ const QuestionListDropdown = React.memo(({ questions, currentQuestion, onSelect 
 
   return (
     <Box
-      position="absolute"
-      top="calc(100% + 8px)"
-      left="50%"
-      transform="translateX(-50%)"
-      width="120px"
+      {...dropdownPosition}
       height={listHeight}
       backgroundColor={colorMode === 'light' 
         ? "brand.background.light" 
