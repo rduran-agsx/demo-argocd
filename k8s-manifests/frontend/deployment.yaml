@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: hiraya-frontend
-        image: amihanglobal/hiraya-frontend:7
+        image: amihanglobal/hiraya-frontend:8
         imagePullPolicy: Always
         ports:
         - containerPort: 80
