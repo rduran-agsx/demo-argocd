@@ -8,6 +8,8 @@ node_modules/
 /backend/venv/
 /backend/providers/
 /backend/*.pyc
+backend/.env.development
+backend/.env.production
 
 # Frontend
 /frontend/node_modules/
