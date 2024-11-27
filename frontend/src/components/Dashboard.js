@@ -337,7 +337,7 @@ const WelcomeComponent = ({ users, countries }) => {
             color="white"
             textAlign={{ base: "center", md: "left" }}
           >
-            Welcome to Athena
+            Welcome to Athena-Demo
           </Text>
           <Text
             fontSize={{ base: "16px", md: "18px" }}
