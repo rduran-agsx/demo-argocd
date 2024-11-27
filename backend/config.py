@@ -13,11 +13,11 @@ class Config:
     ENV = os.getenv('FLASK_ENV', 'development')
     DEBUG = ENV == 'development'
     
-    DB_USER = os.getenv('DB_USER', 'hiraya-admin')
-    DB_PASSWORD = os.getenv('DB_PASSWORD', 'password')
-    DB_HOST = os.getenv('DB_HOST', 'localhost')
-    DB_PORT = os.getenv('DB_PORT', '5433')
-    DB_NAME = os.getenv('DB_NAME', 'hiraya-db')
+    DB_USER = os.getenv('DB_USER', 'hirayaadmin')  # from hiraya-admin
+    DB_PASSWORD = os.getenv('DB_PASSWORD', '8yROXZstffbQv0xqBhZv')  # from password
+    DB_HOST = os.getenv('DB_HOST', 'hiraya-db.cp262q2ikdda.ap-southeast-1.rds.amazonaws.com') # from hiraya-db
+    DB_PORT = os.getenv('DB_PORT', '5432')
+    DB_NAME = os.getenv('DB_NAME', 'hirayadb')  # from hiraya-db
 
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL') or \
         f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'

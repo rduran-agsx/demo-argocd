@@ -1,0 +1,18 @@
+# k8s-manifests/backend/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hiraya-backend-config
+  namespace: cet-rduran
+  labels:
+    app: hiraya-backend
+data:
+  FLASK_APP: app.py
+  FLASK_ENV: production
+  CORS_ORIGINS: "https://hiraya.amihan.net"
+  FRONTEND_URL: "https://hiraya.amihan.net"
+  API_URL: "https://hiraya.amihan.net/api"
+  GUNICORN_WORKERS: "4"
+  GUNICORN_THREADS: "4"
+  GUNICORN_TIMEOUT: "300"
+  GUNICORN_KEEPALIVE: "5"

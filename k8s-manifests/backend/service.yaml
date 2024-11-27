@@ -1,0 +1,14 @@
+# k8s-manifests/backend/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hiraya-backend
+  namespace: cet-rduran
+spec:
+  type: NodePort
+  selector:
+    app: hiraya-backend
+  ports:
+  - port: 5000
+    targetPort: 5000
+    nodePort: 30050

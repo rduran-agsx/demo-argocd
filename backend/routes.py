@@ -163,7 +163,11 @@ def get_exam(user, exam_id):
         abort(400, description="Invalid exam ID")
     
     exam_id = unquote(exam_id)
-    provider_name, exam_title_with_code = exam_id.split('-', 1)
+    try:
+        provider_name, exam_details = exam_id.split('-', 1)
+        exam_code, exam_title = exam_details.split(': ', 1) if ': ' in exam_details else ('', exam_details)
+    except ValueError:
+        abort(400, description="Malformed exam ID")
     
     provider = Provider.query.filter_by(name=provider_name).first()
     if not provider:
@@ -171,18 +175,24 @@ def get_exam(user, exam_id):
     
     exam = Exam.query.filter_by(
         provider_id=provider.id,
-        title=exam_title_with_code
+        id=exam_id
     ).first()
     
     if not exam:
-        exam = Exam.query.filter(
-            Exam.provider_id == provider.id,
-            Exam.id.ilike(f"{provider_name}-{exam_title_with_code}%")
-        ).first()
+        if exam_code:
+            exam = Exam.query.filter_by(
+                provider_id=provider.id,
+                title=f"{exam_code}: {exam_title}"
+            ).first()
+        else:
+            exam = Exam.query.filter_by(
+                provider_id=provider.id,
+                title=exam_title
+            ).first()
     
     if not exam:
         abort(404, description="Exam not found")
-    
+
     exam_data = {
         'id': exam.id,
         'provider': provider.name,
@@ -217,7 +227,7 @@ def get_exam(user, exam_id):
         
     except Exception as e:
         db.session.rollback()
-        print(f"Error tracking exam visit: {str(e)}")
+        current_app.logger.error(f"Error tracking exam visit: {str(e)}")
     
     return jsonify(exam_data)
 
@@ -359,52 +369,64 @@ def get_answers(user, exam_id):
 @routes_bp.route('/submit-answers', methods=['POST'])
 @require_auth
 def submit_answers(user):
-    data = request.json
-    exam_id = unquote(data['exam_id'])
-    user_answers = data['user_answers']
-    
-    exam = Exam.query.filter_by(id=exam_id).first()
-    if not exam:
-        provider_name = exam_id.split('-')[0]
-        exam_title = exam_id.split(':', 1)[1].strip() if ':' in exam_id else exam_id
+    try:
+        data = request.json
+        exam_id = unquote(data['exam_id'])
+        user_answers = data['user_answers']
         
-        exam = Exam.query.filter(
-            Exam.id.ilike(f"{provider_name}-%"),
-            Exam.title.ilike(f"%{exam_title}%")
-        ).first()
-        
+        exam = Exam.query.filter_by(id=exam_id).first()
+        if not exam:
+            try:
+                provider_name, exam_details = exam_id.split('-', 1)
+                exam_code, exam_title = exam_details.split(': ', 1) if ': ' in exam_details else ('', exam_details)
+                
+                provider = Provider.query.filter_by(name=provider_name).first()
+                if provider:
+                    if exam_code:
+                        exam = Exam.query.filter_by(
+                            provider_id=provider.id,
+                            title=f"{exam_code}: {exam_title}"
+                        ).first()
+                    else:
+                        exam = Exam.query.filter_by(
+                            provider_id=provider.id,
+                            title=exam_title
+                        ).first()
+            except ValueError:
+                return jsonify({'error': 'Invalid exam ID format'}), 400
+
         if not exam:
             return jsonify({'error': 'Exam not found'}), 404
-        
+
         exam_id = exam.id
+        
+        total_questions = 0
+        correct_answers = 0
+        incorrect_questions = []
 
-    if not exam:
-        return jsonify({'error': 'Exam not found'}), 404
+        for topic in exam.topics:
+            topic_data = topic.data
+            for question_index, question in enumerate(topic_data):
+                total_questions += 1
+                question_id = f"T{topic.number} Q{question_index + 1}"
+                
+                user_answer_indices = user_answers.get(question_id, [])
+                if not isinstance(user_answer_indices, list):
+                    user_answer_indices = []
+                
+                correct_indices = {ord(letter.upper()) - ord('A') for letter in question['answer']}
+                user_indices = {int(index) for index in user_answer_indices if isinstance(index, (int, str)) and str(index).isdigit()}
 
-    total_questions = 0
-    correct_answers = 0
-    incorrect_questions = []
+                if correct_indices == user_indices:
+                    correct_answers += 1
+                else:
+                    incorrect_questions.append(question_id)
 
-    for topic in exam.topics:
-        topic_data = topic.data
-        for question_index, question in enumerate(topic_data):
-            total_questions += 1
-            question_id = f"T{topic.number} Q{question_index + 1}"
-            correct_answer = set(question['answer'])
-            user_answer = set(user_answers.get(question_id, []))
+        score = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
+        passed = score >= 75
 
-            correct_indices = set(ord(letter.upper()) - ord('A') for letter in correct_answer)
-            user_indices = set(int(index) for index in user_answer)
+        current_app.logger.info(f"Exam submission - User: {user.id}, Exam: {exam_id}, Score: {score}, Correct: {correct_answers}/{total_questions}")
 
-            if correct_indices == user_indices:
-                correct_answers += 1
-            else:
-                incorrect_questions.append(question_id)
-
-    score = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
-    passed = score >= 75
-
-    try:
         exam_attempt = ExamAttempt(
             user_id=user.id,
             exam_id=exam_id,
@@ -426,9 +448,11 @@ def submit_answers(user):
         }
 
         return jsonify(result)
+
     except Exception as e:
+        current_app.logger.error(f"Error submitting answers: {str(e)}")
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to submit exam answers'}), 500
 
 @routes_bp.route('/incorrect-questions/<exam_id>', methods=['GET'])
 @require_auth
