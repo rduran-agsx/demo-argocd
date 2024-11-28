@@ -1,39 +1,41 @@
+# ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: argocd-ingress
-  namespace: argocd
+  name: hiraya-ingress
+  namespace: cet-rduran
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     kubernetes.io/ingress.class: nginx
     kubernetes.io/tls-acme: "true"
-    # Security headers
     nginx.ingress.kubernetes.io/configuration-snippet: |
       more_set_headers "X-Frame-Options: Deny";
       more_set_headers "X-Content-Type-Options: nosniff";
       more_set_headers "Referrer-Policy: same-origin";
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    # ArgoCD specific settings
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
-    # For websocket support
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: 50m
+    nginx.ingress.kubernetes.io/proxy-buffer-size: 128k
 spec:
   rules:
-    - host: argocd.cet.amihan.net
+    - host: hiraya.amihan.net
       http:
         paths:
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: hiraya-backend
+                port:
+                  number: 5000
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: argocd-server
+                name: hiraya-frontend
                 port:
-                  number: 443
+                  number: 80
   tls:
     - hosts:
-        - argocd.cet.amihan.net
-      secretName: argocd-tls
+        - hiraya.amihan.net
+      secretName: hiraya-tls
