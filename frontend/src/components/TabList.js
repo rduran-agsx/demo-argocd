@@ -4,15 +4,32 @@ import {
   Button, 
   ButtonGroup, 
   Flex, 
-  Text, 
-  useColorMode
+  Text,
+  Icon,
+  Tooltip,
+  useColorMode,
 } from '@chakra-ui/react';
 import { PiArrowLeftBold, PiArrowRightBold } from "react-icons/pi";
 
-const TabButton = ({ children, isSelected, ...props }) => {
+const TabButton = React.memo(({ children, isSelected, onClick, ...props }) => {
   const { colorMode } = useColorMode();
-  
-  return (
+  const [isTruncated, setIsTruncated] = React.useState(false);
+  const textRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const checkTruncation = () => {
+      if (textRef.current) {
+        setIsTruncated(textRef.current.scrollWidth > textRef.current.clientWidth);
+      }
+    };
+
+    checkTruncation();
+    window.addEventListener('resize', checkTruncation);
+    
+    return () => window.removeEventListener('resize', checkTruncation);
+  }, [children]);
+
+  const buttonContent = (
     <Button
       variant="referral"
       backgroundColor={isSelected 
@@ -30,12 +47,35 @@ const TabButton = ({ children, isSelected, ...props }) => {
       }}
       border="1px solid"
       borderColor={colorMode === 'light' ? 'brand.border.light' : 'brand.border.dark'}
+      height="48px"
+      px={4}
+      minW={0}
+      flex={1}
+      transition="all 0.2s"
+      onClick={onClick}
       {...props}
     >
-      {children}
+      <Text ref={textRef} isTruncated maxW="100%">
+        {children}
+      </Text>
     </Button>
   );
-};
+
+  if (!isTruncated) {
+    return buttonContent;
+  }
+
+  return (
+    <Tooltip 
+      label={children}
+      hasArrow
+      bg={colorMode === 'light' ? 'gray.700' : 'gray.200'}
+      color={colorMode === 'light' ? 'white' : 'black'}
+    >
+      {buttonContent}
+    </Tooltip>
+  );
+});
 
 const NavIconBox = ({ icon: Icon, onClick, isDisabled }) => {
   const { colorMode } = useColorMode();
@@ -130,6 +170,7 @@ const TabList = ({
   currentTab 
 }) => {
   const { colorMode } = useColorMode();
+  const containerRef = React.useRef(null);
 
   const handleTabChange = (selectedTab) => {
     if (selectedTab !== currentTab) {
@@ -170,20 +211,19 @@ const TabList = ({
       width="100%" 
       marginBottom={4}
     >
-
-      <Box display={{ base: "none", md: "block" }} width="100%">
+      <Box display={{ base: "none", md: "block" }} width="100%" ref={containerRef}>
         <ButtonGroup 
           isAttached={true} 
           variant="referral" 
           width="100%" 
           marginBottom={4}
+          spacing={0}
         >
           {tabs.map((tab) => (
             <TabButton
               key={tab}
               isSelected={currentTab === tab}
               onClick={() => handleTabChange(tab)}
-              flex={1}
               data-testid={`tab-${tab}`}
             >
               {tab}

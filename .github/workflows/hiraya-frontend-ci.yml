@@ -1,0 +1,98 @@
+name: Frontend CI
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+  workflow_dispatch:
+
+jobs:
+  frontend-ci:
+    runs-on: ubuntu-latest
+    
+    env:
+      DOCKER_IMAGE: amihanglobal/hiraya-frontend
+      MANIFEST_PATH: k8s-manifests/frontend
+      API_URL: https://hiraya.amihan.net/api
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to DockerHub
+        run: |
+          echo "Am1h@n0808" | docker login -u amihanglobal --password-stdin
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}:${{ github.run_number }},${{ env.DOCKER_IMAGE }}:latest
+          build-args: |
+            REACT_APP_API_URL=${{ env.API_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update Kubernetes deployment
+        run: |
+          cd ${{ env.MANIFEST_PATH }}
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # Update image tag in deployment.yaml
+          sed -i "s|${{ env.DOCKER_IMAGE }}:[0-9]*|${{ env.DOCKER_IMAGE }}:${{ github.run_number }}|" deployment.yaml
+          
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git add deployment.yaml
+          git commit -m "Update frontend image to version ${{ github.run_number }}"
+
+      - name: Pull latest changes from remote
+        run: |
+          git remote set-url origin https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git pull origin main --rebase
+
+      - name: Push changes if there are any
+        if: success()
+        run: |
+          git push origin main || echo "No changes to push"
+
+      - name: Verify image pushed to DockerHub
+        run: |
+          # Wait a few seconds for DockerHub to process the push
+          sleep 10
+          # Try to pull the image we just pushed to verify it's available
+          docker pull ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Image successfully pushed and verified on DockerHub"
+          else
+            echo "❌ Failed to verify image on DockerHub"
+            exit 1
+          fi
+
+      - name: Workflow summary
+        run: |
+          echo "### Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: \`${{ env.DOCKER_IMAGE }}:${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Manifest updated: \`${{ env.MANIFEST_PATH }}/deployment.yaml\`" >> $GITHUB_STEP_SUMMARY
+          echo "- API URL: \`${{ env.API_URL }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Build Number: \`${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY

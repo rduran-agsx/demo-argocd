@@ -145,7 +145,7 @@ const CategoriesDropdown = ({ categories, selectedCategory, onSelect }) => {
           border="1px solid"
           borderColor={colorMode === 'light' ? "brand.border.light" : "brand.border.dark"}
           marginTop={2}
-          zIndex={1}
+          zIndex={1000}
           overflowY="auto"
         >
           {sortedCategories.map((category, index) => (

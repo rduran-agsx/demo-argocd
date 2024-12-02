@@ -2,6 +2,8 @@
 .env
 node_modules/
 *.log
+hiraya-app-*.txt
+repomix.*.json
 
 # Backend
 /backend/__pycache__/
