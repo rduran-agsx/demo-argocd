@@ -24,13 +24,12 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 RUN mkdir -p /app/logs /app/providers
 
-COPY providers /app/providers
-RUN echo "Verifying providers directory contents:" && \
-    find /app/providers -type f -name "*.json" | wc -l && \
-    echo "Provider directories:" && \
-    ls -la /app/providers
+COPY . /app/
 
-COPY . /app
+RUN echo "Verifying providers directory contents:" && \
+    find /app/providers -type f -name "*.json" | wc -l || true && \
+    echo "Provider directories:" && \
+    ls -la /app/providers || true
 
 RUN find /app -name "*.pyc" -delete && \
     find /app -name "__pycache__" -delete
@@ -38,9 +37,6 @@ RUN find /app -name "*.pyc" -delete && \
 RUN chown -R nobody:nogroup /app && \
     chmod -R 755 /app/scripts && \
     chmod +x /app/scripts/init-backend.sh
-
-RUN echo "Final /app contents:" && ls -la /app && \
-    echo "Final /app/providers contents:" && ls -la /app/providers
 
 USER nobody
 

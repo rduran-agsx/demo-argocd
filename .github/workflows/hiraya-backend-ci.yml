@@ -15,12 +15,32 @@ jobs:
       DOCKER_IMAGE: amihanglobal/hiraya-backend
       MANIFEST_PATH: k8s-manifests/backend
       API_URL: https://hiraya.amihan.net/api
+      AWS_REGION: ap-southeast-1
+      S3_PROVIDERS_URI: s3://hiraya-app-providers/providers.tar.gz
+
+    permissions:
+      id-token: write
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::590687552497:role/AWSAdministratorAccess
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download providers from S3
+        run: |
+          mkdir -p backend/providers
+          aws s3 cp ${{ env.S3_PROVIDERS_URI }} backend/
+          cd backend
+          tar -xzf providers.tar.gz
+          rm providers.tar.gz
 
       - name: Set up Python
         uses: actions/setup-python@v4
