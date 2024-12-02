@@ -33,8 +33,10 @@ jobs:
         uses: docker/setup-buildx-action@v2
 
       - name: Login to DockerHub
-        run: |
-          echo "Am1h@n0808" | docker login -u amihanglobal --password-stdin
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
@@ -42,7 +44,7 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile.frontend
           push: true
-          tags: ${{ env.DOCKER_IMAGE }}:${{ github.run_number }},${{ env.DOCKER_IMAGE }}:latest
+          tags: ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
           build-args: |
             REACT_APP_API_URL=${{ env.API_URL }}
           cache-from: type=gha
@@ -54,7 +56,6 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
-          # Update image tag in deployment.yaml
           sed -i "s|${{ env.DOCKER_IMAGE }}:[0-9]*|${{ env.DOCKER_IMAGE }}:${{ github.run_number }}|" deployment.yaml
           
           if git diff --quiet; then
@@ -77,9 +78,7 @@ jobs:
 
       - name: Verify image pushed to DockerHub
         run: |
-          # Wait a few seconds for DockerHub to process the push
           sleep 10
-          # Try to pull the image we just pushed to verify it's available
           docker pull ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
           
           if [ $? -eq 0 ]; then

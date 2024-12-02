@@ -21,7 +21,6 @@ jobs:
 
     permissions:
       id-token: write
-      contents: write
 
     steps:
       - name: Checkout repository
@@ -62,7 +61,7 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile.backend
           push: true
-          tags: ${{ env.DOCKER_IMAGE }}:${{ github.run_number }},${{ env.DOCKER_IMAGE }}:latest
+          tags: ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
           build-args: |
             FLASK_ENV=production
             API_URL=${{ env.API_URL }}
