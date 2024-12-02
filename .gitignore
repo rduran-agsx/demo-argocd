@@ -9,6 +9,7 @@ repomix.*.json
 /backend/__pycache__/
 /backend/venv/
 /backend/providers/
+/backend/providers.tar.gz
 /backend/*.pyc
 backend/.env.development
 backend/.env.production
