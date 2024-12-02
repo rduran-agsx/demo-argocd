@@ -1,19 +1,19 @@
-name: Hiraya Frontend CI
+name: Hiraya Backend CI
 on:
   push:
     branches:
       - main
     paths:
-      - 'frontend/**'
+      - 'backend/**'
   workflow_dispatch:
 
 jobs:
-  frontend-ci:
+  backend-ci:
     runs-on: ubuntu-latest
     
     env:
-      DOCKER_IMAGE: amihanglobal/hiraya-frontend
-      MANIFEST_PATH: k8s-manifests/frontend
+      DOCKER_IMAGE: amihanglobal/hiraya-backend
+      MANIFEST_PATH: k8s-manifests/backend
       API_URL: https://hiraya.amihan.net/api
 
     steps:
@@ -22,12 +22,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'backend/requirements.txt'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -39,12 +39,13 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile.frontend
+          context: ./backend
+          file: ./backend/Dockerfile.backend
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ github.run_number }},${{ env.DOCKER_IMAGE }}:latest
           build-args: |
-            REACT_APP_API_URL=${{ env.API_URL }}
+            FLASK_ENV=production
+            API_URL=${{ env.API_URL }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -63,7 +64,7 @@ jobs:
           fi
           
           git add deployment.yaml
-          git commit -m "Update frontend image to version ${{ github.run_number }}"
+          git commit -m "Update backend image to version ${{ github.run_number }}"
 
       - name: Pull latest changes from remote
         run: |
@@ -94,4 +95,5 @@ jobs:
           echo "### Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
           echo "- Image: \`${{ env.DOCKER_IMAGE }}:${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Manifest updated: \`${{ env.MANIFEST_PATH }}/deployment.yaml\`" >> $GITHUB_STEP_SUMMARY
+          echo "- API URL: \`${{ env.API_URL }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Build Number: \`${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
