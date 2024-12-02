@@ -11,6 +11,10 @@ jobs:
   backend-ci:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write
+      id-token: write
+    
     env:
       DOCKER_IMAGE: amihanglobal/hiraya-backend
       MANIFEST_PATH: k8s-manifests/backend
@@ -19,14 +23,12 @@ jobs:
       SKIP_DB_MIGRATION: "true"
       S3_PROVIDERS_URI: s3://hiraya-app-providers/providers.tar.gz
 
-    permissions:
-      id-token: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -61,9 +63,10 @@ jobs:
       - name: Update Kubernetes deployment
         run: |
           cd ${{ env.MANIFEST_PATH }}
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
           git pull origin main --rebase
           
           # Update the file with more specific pattern
@@ -77,6 +80,8 @@ jobs:
           git add deployment.yaml
           git commit -m "Update backend image to version ${{ github.run_number }}"
           git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify image pushed to DockerHub
         run: |
