@@ -7,6 +7,11 @@ log() {
 }
 
 check_migration_needed() {
+    if [ "$SKIP_DB_MIGRATION" = "true" ]; then
+        echo "false"
+        return
+    fi
+
     # First check if provider table exists AND has data
     local tables_exist=$(psql "$DATABASE_URL" -t -c "SELECT EXISTS (
         SELECT 1 
@@ -23,26 +28,13 @@ check_migration_needed() {
         return
     fi
     
-    # Compare provider counts more accurately
-    local db_count=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM provider;" | tr -d '[:space:]')
-    local file_count=$(find /app/providers -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d '[:space:]')
-    
-    log "Database provider count: $db_count"
-    log "File system provider count: $file_count"
-    
-    if [ "$db_count" -ne "$file_count" ]; then
-        log "Provider count mismatch - migration needed"
+    if [ -n "$FORCE_DB_MIGRATION" ] && [ "$FORCE_DB_MIGRATION" = "true" ]; then
+        log "Force migration flag is set - migration needed"
         echo "true"
-    else
-        echo "false"
+        return
     fi
-}
 
-check_migration_lock() {
-    local has_lock=$(psql "$DATABASE_URL" -t -c "SELECT EXISTS (
-        SELECT 1 FROM pg_tables WHERE tablename = 'migration_lock'
-    );" 2>/dev/null)
-    echo $has_lock | tr -d '[:space:]'
+    echo "false"
 }
 
 verify_db_connection() {
@@ -60,95 +52,6 @@ verify_db_connection() {
     done
     
     log "Failed to connect to database after $max_attempts attempts"
-    return 1
-}
-
-acquire_migration_lock() {
-    local max_attempts=5
-    local attempt=1
-    
-    while [ $attempt -le $max_attempts ]; do
-        if psql "$DATABASE_URL" -c "
-            INSERT INTO migration_lock (pod_name) 
-            VALUES ('$(hostname)') 
-            ON CONFLICT (locked) DO UPDATE 
-            SET pod_name = '$(hostname)',
-                created_at = CURRENT_TIMESTAMP 
-            WHERE migration_lock.created_at < NOW() - INTERVAL '5 minutes'
-            RETURNING locked;" 2>/dev/null | grep -q 't'; then
-            log "Successfully acquired migration lock"
-            return 0
-        fi
-        
-        log "Migration attempt $attempt/$max_attempts failed to acquire lock"
-        sleep 5
-        attempt=$((attempt + 1))
-    done
-    
-    log "Failed to acquire migration lock after $max_attempts attempts"
-    return 1
-}
-
-do_migration() {
-    log "Starting database migration process..."
-    
-    # Create a backup of current schema (if exists)
-    if psql "$DATABASE_URL" -c "\dt" 2>/dev/null | grep -q "provider"; then
-        log "Creating backup of current schema..."
-        pg_dump "$DATABASE_URL" --schema-only > /tmp/schema_backup.sql 2>/dev/null || true
-    fi
-    
-    log "Dropping current schema..."
-    if ! psql "$DATABASE_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>/dev/null; then
-        log "Error dropping schema - attempting to proceed anyway"
-    fi
-    
-    log "Initializing database tables..."
-    if ! python scripts/init_db.py; then
-        log "Error initializing database - attempting to restore from backup"
-        if [ -f "/tmp/schema_backup.sql" ]; then
-            psql "$DATABASE_URL" -f /tmp/schema_backup.sql
-        fi
-        return 1
-    fi
-    
-    log "Migrating provider data..."
-    if ! python scripts/migrate_providers.py; then
-        log "Error during provider migration"
-        return 1
-    fi
-    
-    log "Verifying migration..."
-    if ! python scripts/verify_db.py; then
-        log "Migration verification failed"
-        return 1
-    fi
-    
-    log "Migration completed successfully"
-    return 0
-}
-
-wait_for_migration() {
-    local max_wait=300  # 5 minutes
-    local waited=0
-    
-    while [ $waited -lt $max_wait ]; do
-        if [ "$(check_migration_needed)" = "false" ]; then
-            log "Migration completed by another pod"
-            return 0
-        fi
-        
-        if [ "$(check_migration_lock)" = "f" ]; then
-            log "No active migration lock found"
-            return 0
-        fi
-        
-        log "Waiting for migration to complete... ($waited seconds)"
-        sleep 5
-        waited=$((waited + 5))
-    done
-    
-    log "Timeout waiting for migration"
     return 1
 }
 
@@ -170,15 +73,13 @@ setup_gunicorn() {
 # Main execution flow
 log "Starting initialization process..."
 
-# Verify providers directory
-log "Verifying providers directory structure:"
-if [ ! -d "/app/providers" ]; then
-    log "Error: /app/providers directory not found"
-    exit 1
+# Optional: Download providers from S3 if needed
+if [ "$SKIP_DB_MIGRATION" != "true" ] && [ -n "$S3_PROVIDERS_URI" ]; then
+    log "Downloading providers data from S3..."
+    aws s3 cp "$S3_PROVIDERS_URI" /tmp/providers.tar.gz
+    tar -xzf /tmp/providers.tar.gz -C /app
+    rm /tmp/providers.tar.gz
 fi
-
-PROVIDER_COUNT=$(find /app/providers -mindepth 1 -maxdepth 1 -type d | wc -l)
-log "Found $PROVIDER_COUNT provider directories"
 
 # Verify database connection
 log "Verifying database connection..."
@@ -190,32 +91,16 @@ log "Database connection successful"
 
 # Check and perform migration if needed
 if [ "$(check_migration_needed)" = "true" ]; then
-    log "Migration needed - setting up migration lock..."
-    
-    # Create migration lock table
-    psql "$DATABASE_URL" -c "
-        CREATE TABLE IF NOT EXISTS migration_lock (
-            locked boolean PRIMARY KEY DEFAULT true,
-            created_at timestamp DEFAULT CURRENT_TIMESTAMP,
-            pod_name text
-        );" 2>/dev/null
-    
-    if acquire_migration_lock; then
-        if do_migration; then
-            log "Migration successful - removing lock"
-            psql "$DATABASE_URL" -c "DROP TABLE IF EXISTS migration_lock;" 2>/dev/null
-        else
-            log "Migration failed"
-            exit 1
-        fi
+    log "Running database migration..."
+    if [ -d "/app/providers" ]; then
+        python scripts/init_db.py && \
+        python scripts/migrate_providers.py && \
+        python scripts/verify_db.py
     else
-        log "Another pod is handling migration - waiting..."
-        if ! wait_for_migration; then
-            log "Migration wait timeout - proceeding anyway"
-        fi
+        log "Warning: Providers directory not found, skipping migration"
     fi
 else
-    log "No migration needed - database is up to date"
+    log "Skipping database migration - database is up to date or migration is disabled"
 fi
 
 # Setup and start Gunicorn
