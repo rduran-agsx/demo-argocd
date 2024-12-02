@@ -28,11 +28,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Removed role-to-assume and assumed AWS CLI setup via environment or secret
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::590687552497:role/AWSAdministratorAccess
           aws-region: ${{ env.AWS_REGION }}
+          role-skip-session-tagging: true  # Optional if SSO doesn't need tagging
+          access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Download providers from S3
         run: |
@@ -98,9 +101,7 @@ jobs:
 
       - name: Verify image pushed to DockerHub
         run: |
-          # Wait a few seconds for DockerHub to process the push
           sleep 10
-          # Try to pull the image we just pushed to verify it's available
           docker pull ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
           
           if [ $? -eq 0 ]; then
@@ -115,5 +116,4 @@ jobs:
           echo "### Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
           echo "- Image: \`${{ env.DOCKER_IMAGE }}:${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Manifest updated: \`${{ env.MANIFEST_PATH }}/deployment.yaml\`" >> $GITHUB_STEP_SUMMARY
-          echo "- API URL: \`${{ env.API_URL }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Build Number: \`${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
