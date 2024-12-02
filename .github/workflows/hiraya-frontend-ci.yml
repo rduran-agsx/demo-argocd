@@ -7,6 +7,10 @@ on:
       - 'frontend/**'
   workflow_dispatch:
 
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   frontend-ci:
     runs-on: ubuntu-latest
@@ -49,25 +53,44 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
-          sed -i "s|${{ env.DOCKER_IMAGE }}:[0-9]*|${{ env.DOCKER_IMAGE }}:${{ github.run_number }}|" deployment.yaml
+          # Configure git to retry on conflict
+          git config pull.rebase true
+          git config rebase.autoStash true
           
-          if git diff --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
+          # Try update with retries
+          max_attempts=3
+          attempt=1
           
-          git add deployment.yaml
-          git commit -m "Update frontend image to version ${{ github.run_number }}"
-
-      - name: Pull latest changes from remote
-        run: |
-          git remote set-url origin https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          git pull origin main --rebase
-
-      - name: Push changes if there are any
-        if: success()
-        run: |
-          git push origin main || echo "No changes to push"
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt to update deployment..."
+            
+            # Pull latest changes
+            git pull origin main --rebase
+            
+            # Update the file
+            sed -i "s|${{ env.DOCKER_IMAGE }}:[0-9]*|${{ env.DOCKER_IMAGE }}:${{ github.run_number }}|" deployment.yaml
+            
+            if git diff --quiet; then
+              echo "No changes to commit"
+              break
+            fi
+            
+            # Try to commit and push
+            if git add deployment.yaml && \
+               git commit -m "Update frontend image to version ${{ github.run_number }}" && \
+               git push origin main; then
+              echo "Successfully updated deployment on attempt $attempt"
+              break
+            fi
+            
+            if [ $attempt -eq $max_attempts ]; then
+              echo "Failed to update deployment after $max_attempts attempts"
+              exit 1
+            fi
+            
+            attempt=$((attempt + 1))
+            sleep 5
+          done
 
       - name: Verify image pushed to DockerHub
         run: |
@@ -84,6 +107,5 @@ jobs:
       - name: Workflow summary
         run: |
           echo "### Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
-          echo "- Image: \`${{ env.DOCKER_IMAGE }}:${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Manifest updated: \`${{ env.MANIFEST_PATH }}/deployment.yaml\`" >> $GITHUB_STEP_SUMMARY
           echo "- Build Number: \`${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
