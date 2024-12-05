@@ -8,6 +8,7 @@ import {
   Center,
   useDisclosure,
   useColorMode,
+  useToast,
 } from "@chakra-ui/react";
 import "@fontsource-variable/karla/wght.css";
 import "@fontsource/space-grotesk/700.css";
@@ -18,6 +19,8 @@ import ComingSoonComponent from "./components/ComingSoonComponent";
 import SelectExamBox from "./components/SelectExamBox";
 import ResultsModal from "./components/ResultsModal";
 import CustomConfirmationDialog from "./components/CustomConfirmationDialog";
+import { createCustomToast } from './components/CustomToast';
+import useQuestionState from './hooks/useQuestionState';
 
 import { fetchWithAuth } from './utils/api';
 
@@ -62,6 +65,9 @@ const MainPage = () => {
   
   const { colorMode } = useColorMode();
 
+  const toast = useToast();
+  const customToast = createCustomToast(toast);
+
   const sidebarBgColor =
     colorMode === "light" ? "brand.surface.light" : "brand.surface.dark";
 
@@ -74,13 +80,19 @@ const MainPage = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [view, setView] = useState("grid");
   const [lastVisitedExam, setLastVisitedExam] = useState(null);
-  const [favoriteQuestions, setFavoriteQuestions] = useState([]);
-  const [selectedOptions, setSelectedOptions] = useState([]);
-  const [userAnswers, setUserAnswers] = useState({});
   const [unansweredQuestions, setUnansweredQuestions] = useState([]);
   const [examResults, setExamResults] = useState(null);
   const [confirmDialogMessage, setConfirmDialogMessage] = useState("");
-  const [incorrectQuestions, setIncorrectQuestions] = useState([]);
+
+  const {
+    userAnswers,
+    favoriteQuestions,
+    incorrectQuestions,
+    saveAnswer,
+    toggleFavorite
+  } = useQuestionState(currentExam, API_URL);
+  
+  const [selectedOptions, setSelectedOptions] = useState([]);
 
   const {
     isOpen: isConfirmOpen,
@@ -141,74 +153,6 @@ const MainPage = () => {
     }
   }, [location, examId, updateLastVisitedExam]);
 
-  const fetchUserAnswers = useCallback(async () => {
-    try {
-      const encodedExamId = encodeURIComponent(currentExam);
-      const response = await fetchWithAuth(
-        `${API_URL}/api/get-answers/${encodedExamId}`
-      );
-      const data = await response.json();
-      const answersMap = {};
-      data.answers.forEach((answer) => {
-        answersMap[`T${answer.topic_number} Q${answer.question_index + 1}`] =
-          answer.selected_options;
-      });
-      setUserAnswers(answersMap);
-    } catch (error) {
-      console.error("Error fetching user answers:", error);
-    }
-  }, [currentExam, API_URL]);
-
-  const fetchIncorrectQuestions = useCallback(async () => {
-    try {
-      const encodedExamId = encodeURIComponent(currentExam);
-      const response = await fetchWithAuth(
-        `${API_URL}/api/incorrect-questions/${encodedExamId}`
-      );
-      const data = await response.json();
-      setIncorrectQuestions(data.incorrect_questions);
-    } catch (error) {
-      console.error("Error fetching incorrect questions:", error);
-    }
-  }, [currentExam, API_URL]);
-
-  useEffect(() => {
-    const fetchExamData = async () => {
-      try {
-        setExamData(null);
-        const encodedExamId = encodeURIComponent(currentExam);
-        const response = await fetchWithAuth(
-          `${API_URL}/api/exams/${encodedExamId}`
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        setExamData(data);
-        const topics = Object.keys(data.topics).map(Number);
-        setCurrentTopic(
-          topics.length === 1 ? topics[0] : currentTopic || topics[0]
-        );
-        setCurrentQuestionIndex(0);
-      } catch (error) {
-        console.error("Error fetching exam data:", error);
-      }
-    };
-
-    if (currentExam) {
-      fetchExamData();
-      fetchUserAnswers();
-      fetchIncorrectQuestions();
-    }
-  }, [
-    currentExam,
-    currentTopic,
-    fetchUserAnswers,
-    fetchIncorrectQuestions,
-    API_URL
-  ]);
-
   useEffect(() => {
     if (examData) {
       const allQuestions = Object.entries(examData.topics).flatMap(
@@ -222,24 +166,6 @@ const MainPage = () => {
       );
     }
   }, [examData, userAnswers]);
-
-  useEffect(() => {
-    if (currentExam) {
-      const fetchFavorites = async () => {
-        try {
-          const response = await fetchWithAuth(
-            `${API_URL}/api/favorites/${currentExam}`
-          );
-          const data = await response.json();
-          setFavoriteQuestions(data.favorites);
-        } catch (error) {
-          console.error("Error fetching favorite questions:", error);
-        }
-      };
-
-      fetchFavorites();
-    }
-  }, [currentExam, API_URL]);
 
   useEffect(() => {
     const fetchSidebarState = async () => {
@@ -261,55 +187,45 @@ const MainPage = () => {
   }, [API_URL]);
 
   useEffect(() => {
-    setSelectedOptions(
-      userAnswers[`T${currentTopic} Q${currentQuestionIndex + 1}`] || []
-    );
-  }, [userAnswers, currentTopic, currentQuestionIndex]);
+    const fetchExamData = async () => {
+      try {
+        setExamData(null);
+        const encodedExamId = encodeURIComponent(currentExam);
+        const response = await fetchWithAuth(
+          `${API_URL}/api/exams/${encodedExamId}`
+        );
+  
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setExamData(data);
+        const topics = Object.keys(data.topics).map(Number);
+        setCurrentTopic(
+          topics.length === 1 ? topics[0] : currentTopic || topics[0]
+        );
+        setCurrentQuestionIndex(0);
+      } catch (error) {
+        console.error("Error fetching exam data:", error);
+      }
+    };
+  
+    if (currentExam) {
+      fetchExamData();
+    }
+  }, [currentExam, currentTopic, API_URL]);
+
+  useEffect(() => {
+    if (currentExam && currentTopic && currentQuestionIndex !== undefined) {
+      const questionId = `T${currentTopic} Q${currentQuestionIndex + 1}`;
+      setSelectedOptions(userAnswers[questionId] || []);
+    }
+  }, [currentExam, currentTopic, currentQuestionIndex, userAnswers]);
 
   const toggleStar = async (event) => {
     event.stopPropagation();
     if (!currentExam || !examData) return;
-
-    try {
-      const response = await fetchWithAuth(`${API_URL}/api/favorite`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          exam_id: currentExam,
-          topic_number: currentTopic,
-          question_index: currentQuestionIndex,
-        }),
-      });
-
-      if (response.ok) {
-        const updatedFavorites = favoriteQuestions.some(
-          (favorite) =>
-            favorite.topic_number === currentTopic &&
-            favorite.question_index === currentQuestionIndex
-        )
-          ? favoriteQuestions.filter(
-              (favorite) =>
-                !(
-                  favorite.topic_number === currentTopic &&
-                  favorite.question_index === currentQuestionIndex
-                )
-            )
-          : [
-              ...favoriteQuestions,
-              {
-                topic_number: currentTopic,
-                question_index: currentQuestionIndex,
-              },
-            ];
-
-        setFavoriteQuestions(updatedFavorites);
-        setIsStarFilled(!isStarFilled);
-      }
-    } catch (error) {
-      console.error("Error toggling favorite:", error);
-    }
+    await toggleFavorite(currentTopic, currentQuestionIndex);
   };
 
   const toggleSidebar = async () => {
@@ -353,9 +269,9 @@ const MainPage = () => {
 
   const handleTabChange = (tab) => {
     console.log(`Tab changed to: ${tab}`);
-    if (tab === "INCORRECT") {
-      fetchIncorrectQuestions();
-    }
+    // Sync selected options with current question's answers
+    const questionId = `T${currentTopic} Q${currentQuestionIndex + 1}`;
+    setSelectedOptions(userAnswers[questionId] || []);
   };
 
   const handleSearch = (searchTerm) => {
@@ -391,9 +307,9 @@ const MainPage = () => {
       const response = await fetchWithAuth(
         `${API_URL}/api/submit-answers`,
         {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             exam_id: currentExam,
@@ -401,11 +317,12 @@ const MainPage = () => {
           }),
         }
       );
-
+  
       if (response.ok) {
         const results = await response.json();
         setExamResults(results);
-        setIncorrectQuestions(results.incorrect_questions);
+        // Remove this line since incorrectQuestions is managed by the hook
+        // setIncorrectQuestions(results.incorrect_questions);
         onOpen();
       } else {
         const errorData = await response.json();
@@ -440,37 +357,7 @@ const MainPage = () => {
 
   const handleOptionSelect = async (newSelectedOptions) => {
     setSelectedOptions(newSelectedOptions);
-    const currentQuestionId = `T${currentTopic} Q${currentQuestionIndex + 1}`;
-
-    try {
-      await fetchWithAuth(`${API_URL}/api/save-answer`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          exam_id: currentExam,
-          topic_number: currentTopic,
-          question_index: currentQuestionIndex,
-          selected_options: newSelectedOptions,
-        }),
-      });
-
-      setUserAnswers((prev) => ({
-        ...prev,
-        [currentQuestionId]: newSelectedOptions,
-      }));
-
-      if (newSelectedOptions.length > 0) {
-        setUnansweredQuestions((prev) =>
-          prev.filter((q) => q !== currentQuestionId)
-        );
-      } else {
-        setUnansweredQuestions((prev) => [...prev, currentQuestionId]);
-      }
-    } catch (error) {
-      console.error("Error saving user answer:", error);
-    }
+    await saveAnswer(currentTopic, currentQuestionIndex, newSelectedOptions);
   };
 
   const renderContent = () => {
@@ -563,6 +450,7 @@ const MainPage = () => {
               incorrectQuestions={incorrectQuestions}
               availableTopics={Object.keys(examData.topics).map(Number)}
               onTopicChange={handleTopicChange}
+              toast={customToast}
             />
           </Box>
           {/* Side Panel */}

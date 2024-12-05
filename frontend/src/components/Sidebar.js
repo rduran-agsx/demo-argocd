@@ -23,7 +23,7 @@ import {
 import "@fontsource-variable/karla/wght.css";
 import "@fontsource/space-grotesk/700.css";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from "../contexts/AuthContext";
 
 const SidebarItem = chakra(Flex, {
   baseStyle: {
@@ -146,7 +146,7 @@ const PremiumBox = React.memo(({ isCollapsed }) => {
           _active={{
             transform: "translateY(0)",
           }}
-          onClick={() => navigate('/premium')}
+          onClick={() => navigate("/premium")}
         >
           Go Premium! ✨
         </Button>
@@ -263,6 +263,26 @@ const Sidebar = ({
       borderRadius="0"
       display="flex"
       flexDirection="column"
+      _before={{
+        content: '""',
+        position: "absolute",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: "1px",
+        backgroundColor: borderColor,
+        zIndex: 1,
+      }}
+      _after={{
+        content: '""',
+        position: "absolute",
+        top: "25px", // Adjusted from 24px
+        right: 0,
+        height: "30px", // Adjusted from 32px for better coverage
+        width: "2px", // Increased from 1px to ensure full coverage
+        backgroundColor: bgColor,
+        zIndex: 25,
+      }}
     >
       {/* Logo Section */}
       <Box flexShrink={0} paddingTop="20px" paddingX="0">
@@ -418,13 +438,15 @@ const Sidebar = ({
         height="32px"
         borderRadius="0 16px 16px 0"
         onClick={onToggleCollapse}
-        zIndex={2}
+        zIndex={20}
         backgroundColor={bgColor}
         border="1px solid"
         borderColor={borderColor}
         borderLeft="none"
         color={textColor}
-        _hover={{ backgroundColor: hoverBg }}
+        _hover={{
+          backgroundColor: hoverBg,
+        }}
         _active={{ backgroundColor: activeBg }}
         transition="all 0.2s"
         padding={0}

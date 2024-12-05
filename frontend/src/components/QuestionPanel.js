@@ -51,8 +51,6 @@ const QuestionPanel = ({
   onOptionSelect,
   selectedOptions,
   userAnswers,
-  unansweredQuestions,
-  setUnansweredQuestions,
   incorrectQuestions,
   availableTopics,
   onTopicChange,
@@ -61,14 +59,16 @@ const QuestionPanel = ({
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [currentTab, setCurrentTab] = useState("ALL QUESTIONS");
-  const [tabIndices, setTabIndices] = useState({
-    "ALL QUESTIONS": questionNumber - 1,
-    FAVORITES: 0,
-    ANSWERED: 0,
-    UNANSWERED: 0,
-    INCORRECT: 0,
-  });
   const [answeredQuestions, setAnsweredQuestions] = useState([]);
+  const [unansweredQuestions, setUnansweredQuestions] = useState([]);
+  const [isTabChanging, setIsTabChanging] = useState(false);
+  const [tabIndices, setTabIndices] = useState({
+    "ALL QUESTIONS": { index: questionNumber - 1, lastQuestion: `T${currentTopic} Q${questionNumber}` },
+    FAVORITES: { index: 0, lastQuestion: null },
+    ANSWERED: { index: 0, lastQuestion: null },
+    UNANSWERED: { index: 0, lastQuestion: null },
+    INCORRECT: { index: 0, lastQuestion: null }
+  });
   const [removingQuestion, setRemovingQuestion] = useState(null);
   const [isNavigationDisabled, setIsNavigationDisabled] = useState(false);
   const [displayedQuestionInfo, setDisplayedQuestionInfo] = useState({
@@ -80,227 +80,240 @@ const QuestionPanel = ({
 
   const getRequiredSelections = useCallback((answer) => {
     if (!answer) return 1;
-    if (typeof answer === "string") return answer.length;
-    if (Array.isArray(answer)) return answer.length;
+  
+    // If answer is a string like "AB", it means we need 2 selections
+    if (typeof answer === "string") {
+      return answer.length;
+    }
+  
+    // If answer is an array, return its length 
+    if (Array.isArray(answer)) {
+      return answer.length;
+    }
+  
     return 1;
   }, []);
 
-  const handleNavigate = useCallback(
-    (direction) => {
-      if (isNavigationDisabled || navigationLock) {
-        return;
+  const isQuestionFullyAnswered = useCallback((questionId) => {
+    // Split the questionId to get topic and question number
+    const [topicPart, questionPart] = questionId.split(" ");
+    const topicNum = parseInt(topicPart.slice(1));
+    const questionNum = parseInt(questionPart.slice(1)) - 1;
+    
+    // Get the actual question data from examData
+    const question = examData?.topics[topicNum]?.[questionNum];
+    
+    if (!question || !question.answer) return false;
+    
+    // Get required selections for this specific question
+    const requiredSelections = getRequiredSelections(question.answer);
+    
+    // Check if user has made all required selections
+    const userHasAnswered = userAnswers[questionId] && 
+                           Array.isArray(userAnswers[questionId]) && 
+                           userAnswers[questionId].length === requiredSelections;
+                           
+    return userHasAnswered;
+  }, [examData, userAnswers, getRequiredSelections]);
+
+  const handleNavigate = useCallback((direction) => {
+    if (navigationLock) return;
+  
+    setNavigationLock(true);
+    const currentQuestionId = `T${currentTopic} Q${questionNumber}`;
+  
+    const navigateInList = (list, currentId) => {
+      const currentIndex = list.indexOf(currentId);
+      const nextIndex = currentIndex + direction;
+      
+      if (nextIndex >= 0 && nextIndex < list.length) {
+        return list[nextIndex];
       }
-
-      setNavigationLock(true);
-      setIsNavigationDisabled(true);
-
-      const currentQuestionId = `T${currentTopic} Q${questionNumber}`;
-
-      switch (currentTab) {
-        case "ALL QUESTIONS": {
-          if (direction === 1 && questionNumber < totalQuestions) {
-            const nextQuestionId = `T${currentTopic} Q${questionNumber + 1}`;
-            onQuestionSelect(nextQuestionId);
-          } else if (direction === -1 && questionNumber > 1) {
-            const prevQuestionId = `T${currentTopic} Q${questionNumber - 1}`;
-            onQuestionSelect(prevQuestionId);
-          }
-          break;
+      return null;
+    };
+  
+    let nextQuestion = null;
+  
+    switch (currentTab) {
+      case "ALL QUESTIONS": {
+        const nextNum = questionNumber + direction;
+        if (nextNum >= 1 && nextNum <= totalQuestions) {
+          nextQuestion = `T${currentTopic} Q${nextNum}`;
         }
-
-        case "FAVORITES": {
-          const currentIndex = favoriteQuestions.findIndex(
-            (item) =>
-              `T${item.topic_number} Q${item.question_index + 1}` ===
-              currentQuestionId
-          );
-          const nextIndex =
-            (currentIndex !== -1 ? currentIndex : tabIndices["FAVORITES"]) +
-            direction;
-
-          if (nextIndex >= 0 && nextIndex < favoriteQuestions.length) {
-            const favorite = favoriteQuestions[nextIndex];
-            const targetQuestion = `T${favorite.topic_number} Q${
-              favorite.question_index + 1
-            }`;
-            setTabIndices((prev) => ({ ...prev, FAVORITES: nextIndex }));
-            onQuestionSelect(targetQuestion);
-          }
-          break;
-        }
-
-        case "ANSWERED": {
-          const answeredIndex = answeredQuestions.indexOf(currentQuestionId);
-          const currentIndex =
-            answeredIndex !== -1 ? answeredIndex : tabIndices["ANSWERED"];
-          const nextIndex = currentIndex + direction;
-
-          if (nextIndex >= 0 && nextIndex < answeredQuestions.length) {
-            const targetQuestion = answeredQuestions[nextIndex];
-            setTabIndices((prev) => ({ ...prev, ANSWERED: nextIndex }));
-
-            const [topic, question] = targetQuestion.split(" ");
-            const questionNumber = parseInt(question.slice(1));
-
-            setTimeout(() => {
-              onQuestionSelect(`${topic} Q${questionNumber}`);
-              setNavigationLock(false);
-              setIsNavigationDisabled(false);
-            }, 50);
-
-            return;
-          }
-          break;
-        }
-
-        case "UNANSWERED": {
-          const currentIndex = unansweredQuestions.indexOf(currentQuestionId);
-          const nextIndex =
-            (currentIndex !== -1 ? currentIndex : tabIndices["UNANSWERED"]) +
-            direction;
-
-          if (nextIndex >= 0 && nextIndex < unansweredQuestions.length) {
-            const targetQuestion = unansweredQuestions[nextIndex];
-            setTabIndices((prev) => ({ ...prev, UNANSWERED: nextIndex }));
-            onQuestionSelect(targetQuestion);
-          }
-          break;
-        }
-
-        case "INCORRECT": {
-          const currentIndex = incorrectQuestions.indexOf(currentQuestionId);
-          const nextIndex =
-            (currentIndex !== -1 ? currentIndex : tabIndices["INCORRECT"]) +
-            direction;
-
-          if (nextIndex >= 0 && nextIndex < incorrectQuestions.length) {
-            const targetQuestion = incorrectQuestions[nextIndex];
-            setTabIndices((prev) => ({ ...prev, INCORRECT: nextIndex }));
-            onQuestionSelect(targetQuestion);
-          }
-          break;
-        }
-        default:
-          break;
+        break;
       }
-
-      setTimeout(() => {
-        setNavigationLock(false);
-        setIsNavigationDisabled(false);
-      }, 100);
-    },
-    [
-      isNavigationDisabled,
-      navigationLock,
-      currentTab,
-      currentTopic,
-      questionNumber,
-      totalQuestions,
-      tabIndices,
-      favoriteQuestions,
-      answeredQuestions,
-      unansweredQuestions,
-      incorrectQuestions,
-      onQuestionSelect,
-    ]
-  );
-
-  const handleTabChange = useCallback(
-    (tab) => {
-      if (navigationLock || isNavigationDisabled) {
-        return;
+  
+      case "FAVORITES": {
+        const currentIndex = favoriteQuestions.findIndex(
+          item => `T${item.topic_number} Q${item.question_index + 1}` === currentQuestionId
+        );
+        const nextIndex = currentIndex + direction;
+        if (nextIndex >= 0 && nextIndex < favoriteQuestions.length) {
+          const next = favoriteQuestions[nextIndex];
+          nextQuestion = `T${next.topic_number} Q${next.question_index + 1}`;
+        }
+        break;
       }
+  
+      case "ANSWERED": {
+        const currentIndex = answeredQuestions.indexOf(currentQuestionId);
+        const nextIndex = (currentIndex !== -1 ? currentIndex : 0) + direction;
+        if (nextIndex >= 0 && nextIndex < answeredQuestions.length) {
+          nextQuestion = answeredQuestions[nextIndex];
+        }
+        break;
+      }
+  
+      case "UNANSWERED": {
+        nextQuestion = navigateInList(unansweredQuestions, currentQuestionId);
+        break;
+      }
+  
+      case "INCORRECT": {
+        const currentIndex = incorrectQuestions.indexOf(currentQuestionId);
+        const nextIndex = 
+          (currentIndex !== -1 ? currentIndex : tabIndices["INCORRECT"].index) + 
+          direction;
+  
+        if (nextIndex >= 0 && nextIndex < incorrectQuestions.length) {
+          nextQuestion = incorrectQuestions[nextIndex];
+          setTabIndices((prev) => ({
+            ...prev,
+            INCORRECT: { index: nextIndex, lastQuestion: nextQuestion }
+          }));
+        }
+        break;
+      }
+  
+      default: {
+        break;
+      }
+    }
+  
+    if (nextQuestion) {
+      // Update the lastQuestion for the current tab
+      setTabIndices((prev) => ({
+        ...prev,
+        [currentTab]: {
+          index: parseInt(nextQuestion.split(" Q")[1]) - 1,
+          lastQuestion: nextQuestion
+        }
+      }));
+      onQuestionSelect(nextQuestion);
+    }
+  
+    setTimeout(() => setNavigationLock(false), 100);
+  }, [
+    currentTab,
+    currentTopic, 
+    questionNumber,
+    totalQuestions,
+    favoriteQuestions,
+    answeredQuestions,
+    unansweredQuestions,
+    incorrectQuestions,
+    navigationLock,
+    onQuestionSelect,
+    tabIndices
+  ]);
 
-      setCurrentTab(tab);
-      setNavigationLock(true);
-      setIsNavigationDisabled(true);
-
+  const handleTabChange = useCallback((tab) => {
+    if (navigationLock) return;
+  
+    setNavigationLock(true);
+    setIsTabChanging(true);
+    setCurrentTab(tab);
+  
+    const lastQuestion = tabIndices[tab].lastQuestion;
+  
+    const executeTabChange = () => {
       switch (tab) {
-        case "ALL QUESTIONS":
-          onQuestionSelect(
-            `T${currentTopic} Q${tabIndices["ALL QUESTIONS"] + 1}`
-          );
+        case "ALL QUESTIONS": {
+          const questionToSelect = lastQuestion || `T${currentTopic} Q${tabIndices[tab].index + 1}`;
+          onQuestionSelect(questionToSelect);
           break;
-
-        case "FAVORITES":
-          if (favoriteQuestions.length > 0) {
-            const favorite = favoriteQuestions[tabIndices["FAVORITES"]];
-            onQuestionSelect(
-              `T${favorite.topic_number} Q${favorite.question_index + 1}`
-            );
+        }
+  
+        case "FAVORITES": {
+          if (lastQuestion && favoriteQuestions.some(fq => 
+            `T${fq.topic_number} Q${fq.question_index + 1}` === lastQuestion)) {
+            onQuestionSelect(lastQuestion);
+          } else if (favoriteQuestions.length > 0) {
+            const firstFavorite = favoriteQuestions[0];
+            const questionId = `T${firstFavorite.topic_number} Q${firstFavorite.question_index + 1}`;
+            onQuestionSelect(questionId);
           }
           break;
-
-        case "ANSWERED":
-          if (answeredQuestions.length > 0) {
-            onQuestionSelect(
-              answeredQuestions[
-                Math.min(tabIndices["ANSWERED"], answeredQuestions.length - 1)
-              ]
-            );
+        }
+  
+        case "ANSWERED": {
+          if (lastQuestion && answeredQuestions.includes(lastQuestion)) {
+            onQuestionSelect(lastQuestion);
+          } else if (answeredQuestions.length > 0) {
+            onQuestionSelect(answeredQuestions[0]);
           }
           break;
-
-        case "UNANSWERED":
-          if (unansweredQuestions.length > 0) {
-            onQuestionSelect(unansweredQuestions[tabIndices["UNANSWERED"]]);
+        }
+  
+        case "UNANSWERED": {
+          if (lastQuestion && unansweredQuestions.includes(lastQuestion)) {
+            onQuestionSelect(lastQuestion);
+          } else if (unansweredQuestions.length > 0) {
+            onQuestionSelect(unansweredQuestions[0]);
           }
           break;
-
-        case "INCORRECT":
-          if (incorrectQuestions.length > 0) {
-            onQuestionSelect(incorrectQuestions[tabIndices["INCORRECT"]]);
+        }
+  
+        case "INCORRECT": {
+          if (lastQuestion && incorrectQuestions.includes(lastQuestion)) {
+            onQuestionSelect(lastQuestion);
+          } else if (incorrectQuestions.length > 0) {
+            onQuestionSelect(incorrectQuestions[tabIndices["INCORRECT"].index]);
           }
           break;
-        default:
+        }
+  
+        default: {
           break;
+        }
       }
-
-      onTabChange(tab);
-
-      if (currentTab === "ALL QUESTIONS") {
-        setTabIndices((prev) => ({
-          ...prev,
-          "ALL QUESTIONS": questionNumber - 1,
-        }));
-      }
-
-      setTimeout(() => {
+  
+      requestAnimationFrame(() => {
         setNavigationLock(false);
-        setIsNavigationDisabled(false);
-      }, 100);
-    },
-    [
-      currentTopic,
-      questionNumber,
-      tabIndices,
-      favoriteQuestions,
-      answeredQuestions,
-      unansweredQuestions,
-      incorrectQuestions,
-      onQuestionSelect,
-      onTabChange,
-      navigationLock,
-      isNavigationDisabled,
-      currentTab,
-    ]
-  );
+        setIsTabChanging(false);
+      });
+    };
+  
+    requestAnimationFrame(executeTabChange);
+  }, [
+    favoriteQuestions, 
+    answeredQuestions, 
+    unansweredQuestions, 
+    incorrectQuestions,
+    onQuestionSelect, 
+    navigationLock, 
+    currentTopic, 
+    tabIndices
+  ]);
 
   const handleQuestionSelect = useCallback(
     (selectedQuestion) => {
       if (navigationLock || isNavigationDisabled) {
         return;
       }
-
+  
       setNavigationLock(true);
-
+  
       const [, questionPart] = selectedQuestion.split(" ");
       const questionIndex = parseInt(questionPart.slice(1)) - 1;
-
+  
       if (currentTab === "ALL QUESTIONS") {
         setTabIndices((prev) => ({
           ...prev,
-          "ALL QUESTIONS": questionIndex,
+          "ALL QUESTIONS": {
+            index: questionIndex,
+            lastQuestion: selectedQuestion
+          },
         }));
       } else {
         const currentArray = (() => {
@@ -317,18 +330,30 @@ const QuestionPanel = ({
               return null;
           }
         })();
-
+  
         if (currentArray) {
-          const arrayIndex = currentArray.indexOf(selectedQuestion);
+          let arrayIndex;
+          
+          if (currentTab === "FAVORITES") {
+            arrayIndex = currentArray.findIndex(
+              item => `T${item.topic_number} Q${item.question_index + 1}` === selectedQuestion
+            );
+          } else {
+            arrayIndex = currentArray.indexOf(selectedQuestion);
+          }
+  
           if (arrayIndex !== -1) {
             setTabIndices((prev) => ({
               ...prev,
-              [currentTab]: arrayIndex,
+              [currentTab]: {
+                index: arrayIndex,
+                lastQuestion: selectedQuestion
+              },
             }));
           }
         }
       }
-
+  
       onQuestionSelect(selectedQuestion);
       setTimeout(() => setNavigationLock(false), 100);
     },
@@ -345,65 +370,57 @@ const QuestionPanel = ({
   );
 
   useEffect(() => {
-    if (!navigationLock) {
-      setTabIndices((prevIndices) => ({
-        ...prevIndices,
-        "ALL QUESTIONS": questionNumber - 1,
-      }));
-    }
-  }, [questionNumber, navigationLock]);
-
-  useEffect(() => {
-    if (navigationLock || isNavigationDisabled || currentTab !== "ANSWERED")
-      return;
-
-    const currentQuestionId = `T${currentTopic} Q${questionNumber}`;
-    const requiredSelections = getRequiredSelections(questionData.answer);
-    const isAnswered = selectedOptions.length === requiredSelections;
-
-    if (isAnswered) {
-      setAnsweredQuestions((prev) => {
-        if (!prev.includes(currentQuestionId)) {
-          const updatedAnswered = [
-            ...prev.filter((q) => q !== currentQuestionId),
-            currentQuestionId,
-          ];
-          return updatedAnswered;
-        }
-        return prev;
-      });
-    }
-  }, [
-    currentTopic,
-    questionNumber,
-    questionData,
-    selectedOptions,
-    getRequiredSelections,
-    currentTab,
-    navigationLock,
-    isNavigationDisabled,
-    answeredQuestions,
-  ]);
+    if (!examData || !userAnswers) return;
+  
+    // Generate array of all question IDs for current topic
+    const allQuestions = Array.from({ length: totalQuestions }, (_, i) => 
+      `T${currentTopic} Q${i + 1}`
+    );
+  
+    // Sort questions into answered and unanswered arrays based on required selections
+    const answered = [];
+    const unanswered = [];
+  
+    allQuestions.forEach(questionId => {
+      const [topicPart, questionPart] = questionId.split(" ");
+      const topicNum = parseInt(topicPart.slice(1));
+      const questionNum = parseInt(questionPart.slice(1)) - 1;
+      
+      const question = examData.topics[topicNum]?.[questionNum];
+      if (!question) return;
+  
+      const required = getRequiredSelections(question.answer);
+      const userAnswer = userAnswers[questionId];
+      
+      // Changed this condition to better detect unanswered questions
+      if (!userAnswer || userAnswer.length < required) {
+        unanswered.push(questionId);
+      } else {
+        answered.push(questionId);
+      }
+    });
+  
+    setAnsweredQuestions(answered);
+    setUnansweredQuestions(unanswered);
+  }, [currentTopic, totalQuestions, userAnswers, examData, getRequiredSelections]);
 
   useEffect(() => {
     if (navigationLock || isNavigationDisabled) return;
-
+  
     const currentQuestionId = `T${currentTopic} Q${questionNumber}`;
     const requiredSelections = getRequiredSelections(questionData.answer);
     const hasUserAnswers =
       userAnswers[currentQuestionId] &&
       userAnswers[currentQuestionId].length === requiredSelections;
-
-    if (hasUserAnswers && !answeredQuestions.includes(currentQuestionId)) {
-      setAnsweredQuestions((prev) => [...prev, currentQuestionId]);
-    } else if (
-      !hasUserAnswers &&
-      answeredQuestions.includes(currentQuestionId)
-    ) {
-      setAnsweredQuestions((prev) =>
-        prev.filter((q) => q !== currentQuestionId)
-      );
-    }
+  
+    setAnsweredQuestions((prev) => {
+      if (hasUserAnswers && !prev.includes(currentQuestionId)) {
+        return [...prev, currentQuestionId];
+      } else if (!hasUserAnswers && prev.includes(currentQuestionId)) {
+        return prev.filter((q) => q !== currentQuestionId);
+      }
+      return prev;
+    });
   }, [
     currentTopic,
     questionNumber,
@@ -411,8 +428,7 @@ const QuestionPanel = ({
     userAnswers,
     getRequiredSelections,
     navigationLock,
-    isNavigationDisabled,
-    answeredQuestions,
+    isNavigationDisabled
   ]);
 
   useEffect(() => {
@@ -425,8 +441,8 @@ const QuestionPanel = ({
   }, []);
 
   useEffect(() => {
-    if (pendingUpdate || navigationLock) return;
-
+    if (pendingUpdate || navigationLock || isTabChanging) return;
+  
     const getCurrentIndex = (array, identifier) => {
       if (currentTab === "FAVORITES") {
         return array.findIndex(
@@ -436,38 +452,48 @@ const QuestionPanel = ({
       }
       return array.indexOf(identifier);
     };
-
+  
     const currentQuestionId = `T${currentTopic} Q${questionNumber}`;
     const newQuestionInfo = (() => {
       switch (currentTab) {
-        case "FAVORITES":
+        case "FAVORITES": {
+          const total = favoriteQuestions.length;
           return {
-            current:
-              getCurrentIndex(favoriteQuestions, currentQuestionId) + 1 ||
-              tabIndices["FAVORITES"] + 1,
-            total: favoriteQuestions.length,
+            current: total > 0 ? Math.min(
+              (getCurrentIndex(favoriteQuestions, currentQuestionId) + 1) || 1,
+              total
+            ) : 0,
+            total: total
           };
-        case "ANSWERED":
+        }
+        case "ANSWERED": {
+          const total = answeredQuestions.length;
+          const index = getCurrentIndex(answeredQuestions, currentQuestionId);
           return {
-            current:
-              getCurrentIndex(answeredQuestions, currentQuestionId) + 1 ||
-              tabIndices["ANSWERED"] + 1,
-            total: answeredQuestions.length,
+            current: total > 0 ? (index !== -1 ? index + 1 : 1) : 0,
+            total: total
           };
-        case "UNANSWERED":
+        }
+        case "UNANSWERED": {
+          const total = unansweredQuestions.length;
           return {
-            current:
-              getCurrentIndex(unansweredQuestions, currentQuestionId) + 1 ||
-              tabIndices["UNANSWERED"] + 1,
-            total: unansweredQuestions.length,
+            current: total > 0 ? Math.min(
+              (getCurrentIndex(unansweredQuestions, currentQuestionId) + 1) || 1,
+              total
+            ) : 0,
+            total: total
           };
-        case "INCORRECT":
+        }
+        case "INCORRECT": {
+          const total = incorrectQuestions.length;
           return {
-            current:
-              getCurrentIndex(incorrectQuestions, currentQuestionId) + 1 ||
-              tabIndices["INCORRECT"] + 1,
-            total: incorrectQuestions.length,
+            current: total > 0 ? Math.min(
+              (getCurrentIndex(incorrectQuestions, currentQuestionId) + 1) || 1,
+              total
+            ) : 0,
+            total: total
           };
+        }
         default:
           return {
             current: questionNumber,
@@ -475,13 +501,12 @@ const QuestionPanel = ({
           };
       }
     })();
-
+  
     setDisplayedQuestionInfo(newQuestionInfo);
   }, [
     questionNumber,
     totalQuestions,
     currentTab,
-    tabIndices,
     favoriteQuestions,
     answeredQuestions,
     unansweredQuestions,
@@ -489,10 +514,14 @@ const QuestionPanel = ({
     currentTopic,
     pendingUpdate,
     navigationLock,
+    isTabChanging
   ]);
 
   const renderQuestions = () => {
-    // Create a container for the content with extra bottom padding for mobile
+    if (isTabChanging) {
+      return null; // Skip rendering during tab changes
+    }
+  
     return (
       <Box paddingBottom={{ base: "25px", md: 0 }}>
         {currentTab === "ANSWERED" && answeredQuestions.length === 0 ? (
@@ -510,15 +539,31 @@ const QuestionPanel = ({
             >
               There are no unanswered questions.
             </Text>
-          ) : !unansweredQuestions.includes(`T${currentTopic} Q${questionNumber}`) &&
-            !removingQuestion ? (
-            (() => {
-              const nextQuestion = unansweredQuestions[0];
-              const [topic, question] = nextQuestion.split(" ");
-              onQuestionSelect(`${topic} ${question}`);
-              return null;
-            })()
-          ) : null
+          ) : (
+            <VStack spacing={4} align="stretch">
+              <QuestionBox
+                questionNumber={displayedQuestionInfo.current}
+                totalQuestionsInTopic={displayedQuestionInfo.total}
+                questionData={questionData}
+                isStarFilled={isStarFilled}
+                toggleStar={toggleStar}
+                currentTopic={currentTopic}
+              />
+              <OptionsBox
+                options={questionData.options || []}
+                selectedOptions={selectedOptions}
+                onOptionSelect={onOptionSelect}
+                maxSelections={getRequiredSelections(questionData.answer)}
+                isUnansweredTab={true}
+                questionData={questionData}
+              />
+              <AnswerBox
+                answer={questionData.answer || ""}
+                answerDescription={questionData.answerDescription || ""}
+                votes={questionData.votes || []}
+              />
+            </VStack>
+          )
         ) : currentTab === "FAVORITES" && favoriteQuestions.length === 0 ? (
           <Text
             color={colorMode === "light" ? "brand.text.light" : "brand.text.dark"}
@@ -558,6 +603,7 @@ const QuestionPanel = ({
                 onOptionSelect={onOptionSelect}
                 maxSelections={getRequiredSelections(questionData.answer)}
                 isUnansweredTab={currentTab === "UNANSWERED"}
+                questionData={questionData}
               />
               <AnswerBox
                 answer={questionData.answer || ""}
@@ -582,6 +628,7 @@ const QuestionPanel = ({
               onOptionSelect={onOptionSelect}
               maxSelections={getRequiredSelections(questionData.answer)}
               isUnansweredTab={currentTab === "UNANSWERED"}
+              questionData={questionData}
             />
             <AnswerBox
               answer={questionData.answer || ""}
