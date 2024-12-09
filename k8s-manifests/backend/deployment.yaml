@@ -46,7 +46,7 @@ spec:
               key: DB_NAME
       containers:
       - name: hiraya-backend
-        image: amihanglobal/hiraya-backend:15
+        image: amihanglobal/hiraya-backend:17
         imagePullPolicy: Always
         command: ["/app/scripts/init-backend.sh"]
         ports:
