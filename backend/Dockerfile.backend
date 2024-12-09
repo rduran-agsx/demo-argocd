@@ -6,8 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PIP_DEFAULT_TIMEOUT=100 \
     FLASK_ENV=production \
-    PYTHONPATH=/app \
-    SKIP_DB_MIGRATION=true
+    PYTHONPATH=/app
 
 WORKDIR /app
 
@@ -17,18 +16,21 @@ RUN apt-get update \
         postgresql-client \
         libpq-dev \
         curl \
-        awscli \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir -r requirements.txt \
+RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir gunicorn==21.2.0
 
 RUN mkdir -p /app/logs /app/providers
 
-COPY . /app/
+COPY providers /app/providers
+RUN echo "Verifying providers directory contents:" && \
+    find /app/providers -type f -name "*.json" | wc -l && \
+    echo "Provider directories:" && \
+    ls -la /app/providers
+
+COPY . /app
 
 RUN find /app -name "*.pyc" -delete && \
     find /app -name "__pycache__" -delete
@@ -36,6 +38,9 @@ RUN find /app -name "*.pyc" -delete && \
 RUN chown -R nobody:nogroup /app && \
     chmod -R 755 /app/scripts && \
     chmod +x /app/scripts/init-backend.sh
+
+RUN echo "Final /app contents:" && ls -la /app && \
+    echo "Final /app/providers contents:" && ls -la /app/providers
 
 USER nobody
 

@@ -22,7 +22,7 @@ def init_db():
     try:
         db.session.execute(text('DROP SCHEMA public CASCADE;'))
         db.session.execute(text('CREATE SCHEMA public;'))
-        db.session.execute(text('GRANT ALL ON SCHEMA public TO "hirayaadmin";'))
+        db.session.execute(text('GRANT ALL ON SCHEMA public TO "hiraya-admin";'))
         db.session.execute(text('GRANT ALL ON SCHEMA public TO public;'))
         db.session.commit()
         
