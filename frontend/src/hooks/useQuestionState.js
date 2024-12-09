@@ -32,11 +32,7 @@ const useQuestionState = (currentExam, API_URL) => {
         setFavoriteQuestions(favoritesData.favorites);
 
         // Fetch incorrect questions
-        const incorrectResponse = await fetchWithAuth(
-          `${API_URL}/api/incorrect-questions/${encodeURIComponent(currentExam)}`
-        );
-        const incorrectData = await incorrectResponse.json();
-        setIncorrectQuestions(incorrectData.incorrect_questions);
+        await updateIncorrectQuestions();
       } catch (error) {
         console.error('Error fetching user data:', error);
       }
@@ -44,6 +40,18 @@ const useQuestionState = (currentExam, API_URL) => {
 
     fetchUserData();
   }, [currentExam, API_URL]);
+
+  const updateIncorrectQuestions = async () => {
+    try {
+      const incorrectResponse = await fetchWithAuth(
+        `${API_URL}/api/incorrect-questions/${encodeURIComponent(currentExam)}`
+      );
+      const incorrectData = await incorrectResponse.json();
+      setIncorrectQuestions(incorrectData.incorrect_questions);
+    } catch (error) {
+      console.error('Error fetching incorrect questions:', error);
+    }
+  };
 
   const saveAnswer = async (topicNumber, questionIndex, selectedOptions) => {
     const questionId = `T${topicNumber} Q${questionIndex + 1}`;
@@ -68,6 +76,37 @@ const useQuestionState = (currentExam, API_URL) => {
       }));
     } catch (error) {
       console.error('Error saving answer:', error);
+    }
+  };
+
+  const handleExamSubmission = async () => {
+    try {
+      const response = await fetchWithAuth(
+        `${API_URL}/api/submit-answers`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            exam_id: currentExam,
+            user_answers: userAnswers,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit exam');
+      }
+
+      const results = await response.json();
+      // Update incorrect questions immediately after submission
+      await updateIncorrectQuestions();
+      return results;
+    } catch (error) {
+      console.error('Error submitting exam:', error);
+      throw error;
     }
   };
 
@@ -110,7 +149,9 @@ const useQuestionState = (currentExam, API_URL) => {
     favoriteQuestions,
     incorrectQuestions,
     saveAnswer,
-    toggleFavorite
+    toggleFavorite,
+    submitExam: handleExamSubmission,
+    updateIncorrectQuestions
   };
 };
 

@@ -171,36 +171,99 @@ const TabList = ({
 }) => {
   const { colorMode } = useColorMode();
   const containerRef = React.useRef(null);
+  const [isTransitioning, setIsTransitioning] = React.useState(false);
+  const [lastKnownTotal, setLastKnownTotal] = React.useState(totalQuestions);
+  const [transitionState, setTransitionState] = React.useState({
+    previousTotal: totalQuestions,
+    lastPosition: currentQuestionIndex,
+    hasNavigated: false
+  });
+
+  React.useEffect(() => {
+    if (lastKnownTotal === 2 && totalQuestions === 1) {
+      setTransitionState({
+        previousTotal: 2,
+        lastPosition: currentQuestionIndex,
+        hasNavigated: false
+      });
+    }
+    setLastKnownTotal(totalQuestions);
+  }, [totalQuestions, currentQuestionIndex, lastKnownTotal]);
 
   const handleTabChange = (selectedTab) => {
     if (selectedTab !== currentTab) {
       onTabChange(selectedTab);
+      setIsTransitioning(false);
+      setTransitionState({
+        previousTotal: totalQuestions,
+        lastPosition: currentQuestionIndex,
+        hasNavigated: false
+      });
     }
   };
 
   const handleNavigateLeft = () => {
-    const isFirstQuestion = currentQuestionIndex === 0;
-    if (!isNavigationDisabled && !isFirstQuestion) {
-      onNavigateLeft(currentTab);
+    if (!isNavigationDisabled && !isTransitioning) {
+      if (totalQuestions === 1) {
+        onNavigateLeft(currentTab);
+        setTransitionState(prev => ({ ...prev, hasNavigated: true })); // Set flag after navigation
+      } else if (totalQuestions === 2 && currentQuestionIndex === 1) {
+        onNavigateLeft(currentTab);
+      } else if (totalQuestions > 2 && currentQuestionIndex > 0) {
+        onNavigateLeft(currentTab);
+      }
     }
   };
-
+  
   const handleNavigateRight = () => {
-    const isLastQuestion = currentQuestionIndex === totalQuestions - 1;
-    if (!isNavigationDisabled && !isLastQuestion) {
-      onNavigateRight(currentTab);
+    if (!isNavigationDisabled && !isTransitioning) {
+      if (totalQuestions === 1) {
+        onNavigateRight(currentTab);
+        setTransitionState(prev => ({ ...prev, hasNavigated: true })); // Set flag after navigation
+      } else if (totalQuestions === 2 && currentQuestionIndex === 0) {
+        onNavigateRight(currentTab);
+      } else if (totalQuestions > 2 && currentQuestionIndex < totalQuestions - 1) {
+        onNavigateRight(currentTab);
+      }
     }
   };
 
   const shouldDisableLeftNavigation = () => {
     if (isNavigationDisabled) return true;
+    if (totalQuestions === 0) return true;
+  
+    if (totalQuestions === 1) {
+      return transitionState.hasNavigated; // Disable after first navigation
+    }
+  
+    if (totalQuestions === 2) {
+      return currentQuestionIndex === 0;
+    }
     return currentQuestionIndex === 0;
   };
-
+  
   const shouldDisableRightNavigation = () => {
     if (isNavigationDisabled) return true;
+    if (totalQuestions === 0) return true;
+  
+    if (totalQuestions === 1) {
+      return transitionState.hasNavigated; // Disable after first navigation
+    }
+  
+    if (totalQuestions === 2) {
+      return currentQuestionIndex === 1;
+    }
     return currentQuestionIndex === totalQuestions - 1;
   };
+
+  React.useEffect(() => {
+    setIsTransitioning(false);
+    setTransitionState({
+      previousTotal: totalQuestions,
+      lastPosition: currentQuestionIndex,
+      hasNavigated: false
+    });
+  }, [currentTab, totalQuestions, currentQuestionIndex]);
 
   return (
     <Box 

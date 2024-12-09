@@ -1,0 +1,112 @@
+# k8s-manifests/database/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hiraya-database
+  namespace: cet-rduran
+spec:
+  serviceName: hiraya-database
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hiraya-database
+  template:
+    metadata:
+      labels:
+        app: hiraya-database
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+      - name: hiraya-database
+        image: postgres:14-alpine
+        readinessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - hiraya-admin
+              - -d
+              - hiraya-db
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - hiraya-admin
+              - -d
+              - hiraya-db
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+        env:
+        - name: POSTGRES_USER
+          value: "hiraya-admin"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: DB_PASSWORD
+              name: hiraya-database-secret
+        - name: POSTGRES_DB
+          value: "hiraya-db"
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        # PostgreSQL Performance Tuning
+        - name: POSTGRES_MAX_CONNECTIONS
+          value: "200"
+        - name: POSTGRES_SHARED_BUFFERS
+          value: "512MB"
+        - name: POSTGRES_WORK_MEM
+          value: "32MB"
+        - name: POSTGRES_MAINTENANCE_WORK_MEM
+          value: "128MB"
+        - name: POSTGRES_EFFECTIVE_CACHE_SIZE
+          value: "1GB"
+        - name: POSTGRES_RANDOM_PAGE_COST
+          value: "1.1"
+        - name: POSTGRES_SYNCHRONOUS_COMMIT
+          value: "off"
+        - name: POSTGRES_MAX_WAL_SIZE
+          value: "1GB"
+        - name: POSTGRES_MIN_WAL_SIZE
+          value: "80MB"
+        - name: POSTGRES_WAL_BUFFERS
+          value: "16MB"
+        - name: POSTGRES_CHECKPOINT_COMPLETION_TARGET
+          value: "0.9"
+        - name: POSTGRES_DEFAULT_STATISTICS_TARGET
+          value: "500"
+        resources:
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+        - name: postgres-initdb
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+      - name: postgres-initdb
+        configMap:
+          name: postgres-initdb
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: hiraya-database-pvc
+      imagePullSecrets:
+      - name: dockerhub-image-pull-secret

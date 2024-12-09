@@ -15,6 +15,7 @@ import { PiSealFill, PiSeal } from "react-icons/pi";
 import { MdFormatListNumbered } from "react-icons/md";
 import QuestionListDropdown from "./QuestionListDropdown";
 import SubmitButton from "./SubmitButton";
+import AnswerToggle from "./AnswerToggle";
 
 const SealedButton = React.memo(({ icon: Icon, onClick }) => {
   const { colorMode } = useColorMode();
@@ -106,6 +107,8 @@ const SearchBar = ({
   totalQuestions,
   onQuestionSelect,
   onSubmit,
+  answersVisible,
+  onAnswerToggle,
 }) => {
   const { colorMode } = useColorMode();
   const [searchTerm, setSearchTerm] = useState("");
@@ -165,7 +168,7 @@ const SearchBar = ({
       gap={{ base: 3, md: 4 }}
     >
       {/* Search Input */}
-      <InputGroup size="lg" flex={1}>
+      <InputGroup size="lg" flex={1} position="relative">
         <InputLeftElement pointerEvents="none">
           <SearchIcon
             color={
@@ -210,19 +213,35 @@ const SearchBar = ({
           fontFamily='"Karla Variable", sans-serif'
           fontWeight={500}
           fontSize="16px"
+          paddingRight={searchTerm ? "140px" : "88px"} // Adjusted for both clear icon and answer toggle
         />
-        {searchTerm && (
-          <InputRightElement>
-            <CloseIcon
-              color={
-                colorMode === "light" ? "brand.text.light" : "brand.text.dark"
-              }
-              opacity={0.5}
-              cursor="pointer"
-              onClick={clearSearch}
-            />
-          </InputRightElement>
-        )}
+        <Flex
+          position="absolute"
+          right={0}
+          top={0}
+          bottom={0}
+          alignItems="center"
+          height="100%"
+        >
+          {searchTerm && (
+            <Flex 
+              alignItems="center" 
+              height="100%" 
+              paddingRight={2}
+              marginRight={2}
+            >
+              <CloseIcon
+                color={
+                  colorMode === "light" ? "brand.text.light" : "brand.text.dark"
+                }
+                opacity={0.5}
+                cursor="pointer"
+                onClick={clearSearch}
+              />
+            </Flex>
+          )}
+          <AnswerToggle isVisible={answersVisible} onToggle={onAnswerToggle} />
+        </Flex>
       </InputGroup>
 
       {/* Action Buttons */}

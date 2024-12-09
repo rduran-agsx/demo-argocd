@@ -1,0 +1,13 @@
+# k8s-manifests/database/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hiraya-database-pvc
+  namespace: cet-rduran
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: cephfs

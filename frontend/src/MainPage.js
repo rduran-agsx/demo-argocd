@@ -83,13 +83,15 @@ const MainPage = () => {
   const [unansweredQuestions, setUnansweredQuestions] = useState([]);
   const [examResults, setExamResults] = useState(null);
   const [confirmDialogMessage, setConfirmDialogMessage] = useState("");
+  const [answersVisible, setAnswersVisible] = useState(true);
 
   const {
     userAnswers,
     favoriteQuestions,
     incorrectQuestions,
     saveAnswer,
-    toggleFavorite
+    toggleFavorite,
+    submitExam: handleExamSubmission
   } = useQuestionState(currentExam, API_URL);
   
   const [selectedOptions, setSelectedOptions] = useState([]);
@@ -222,6 +224,10 @@ const MainPage = () => {
     }
   }, [currentExam, currentTopic, currentQuestionIndex, userAnswers]);
 
+  const handleAnswerToggle = () => {
+    setAnswersVisible(prev => !prev);
+  };
+
   const toggleStar = async (event) => {
     event.stopPropagation();
     if (!currentExam || !examData) return;
@@ -304,34 +310,19 @@ const MainPage = () => {
 
   const submitExam = async () => {
     try {
-      const response = await fetchWithAuth(
-        `${API_URL}/api/submit-answers`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            exam_id: currentExam,
-            user_answers: userAnswers,
-          }),
-        }
-      );
-  
-      if (response.ok) {
-        const results = await response.json();
-        setExamResults(results);
-        // Remove this line since incorrectQuestions is managed by the hook
-        // setIncorrectQuestions(results.incorrect_questions);
+      const results = await handleExamSubmission();
+      setExamResults(results);
+      // Give the incorrect questions state time to update
+      setTimeout(() => {
         onOpen();
-      } else {
-        const errorData = await response.json();
-        console.error("Error submitting answers:", errorData.error);
-        alert(`Error submitting answers: ${errorData.error}`);
-      }
+      }, 100);
     } catch (error) {
       console.error("Error submitting answers:", error);
-      alert("An error occurred while submitting answers. Please try again.");
+      customToast({
+        title: "Error",
+        description: "An error occurred while submitting answers. Please try again.",
+        status: "error",
+      });
     }
   };
 
@@ -406,6 +397,8 @@ const MainPage = () => {
           <Box flex={1} minWidth="0" paddingBottom={{ base: "80px", md: "0" }}>
             <QuestionPanel
               width="100%"
+              answersVisible={answersVisible}
+              onAnswerToggle={handleAnswerToggle}
               onSearch={handleSearch}
               onShuffle={handleShuffle}
               onReset={handleReset}
@@ -451,6 +444,7 @@ const MainPage = () => {
               availableTopics={Object.keys(examData.topics).map(Number)}
               onTopicChange={handleTopicChange}
               toast={customToast}
+              handleQuestionChange={handleQuestionChange}
             />
           </Box>
           {/* Side Panel */}
